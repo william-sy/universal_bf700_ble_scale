@@ -23,6 +23,7 @@ from .protocol import (
     CHAR_UUID,
     CMD_ASSIGN_UNKNOWN,
     CMD_DELETE_SAVED,
+    CMD_USER_DELETE,
     CMD_DO_MEASUREMENT,
     CMD_GET_SAVED,
     CMD_GET_UNKNOWN,
@@ -111,6 +112,9 @@ class SessionResult:
     # person key -> valid weigh-ins, oldest first
     measurements: dict[str, list[Measurement]] = field(default_factory=dict)
     discarded: list[str] = field(default_factory=list)
+    # slots on the scale after the session, and uids deleted from it
+    users: list[RemoteUser] = field(default_factory=list)
+    deleted: list[int] = field(default_factory=list)
 
 
 class ScaleSession:
@@ -124,6 +128,7 @@ class ScaleSession:
         *,
         measure_timeout: float = 45.0,
         step_timeout: float = 5.0,
+        delete_uids: Sequence[int] = (),
     ) -> None:
         """Initialise the session."""
         self._client = client
@@ -131,6 +136,7 @@ class ScaleSession:
         self._people = list(people)
         self._uids: dict[str, int] = {p.key: p.uid for p in people}
         self._measure_timeout = measure_timeout
+        self._delete_uids = list(delete_uids)
         self._step_timeout = step_timeout
 
         self._start = self._candidates[0]
@@ -275,6 +281,25 @@ class ScaleSession:
         await self._expect(
             lambda f: f[1] == CMD_USER_INFO and len(f) > 3 and f[3] >= f[2]
         )
+
+    async def _delete_users(self) -> None:
+        """Delete queued slots from the scale (never a configured person)."""
+        mine = set(self._uids.values())
+        changed = False
+        for uid in self._delete_uids:
+            if uid in mine:
+                continue
+            if not any(u.uid == uid for u in self._users.values()):
+                self._result.deleted.append(uid)  # already gone
+                continue
+            ack = await self._request(CMD_USER_DELETE, encode_uid(uid))
+            if len(ack) >= 4 and ack[3] == 0:
+                self._result.deleted.append(uid)
+                changed = True
+            else:
+                _LOGGER.warning("Scale refused to delete user %x", uid)
+        if changed:
+            await self._list_users()
 
     async def _resolve_user(self, person: Person) -> None:
         """Make sure the person has a slot on the scale."""
@@ -435,6 +460,7 @@ class ScaleSession:
             status = await self._status()
             self._result.battery = status.battery
             await self._list_users()
+            await self._delete_users()
             for person in self._people:
                 await self._resolve_user(person)
                 await self._sync_profile(person)
@@ -465,6 +491,7 @@ class ScaleSession:
                     self._result.measurements[person.key] = found
                     await self._delete_saved(uid)
             self._result.discarded = self._discarded
+            self._result.users = sorted(self._users.values(), key=lambda u: u.index)
             return self._result
         finally:
             with suppress(Exception):

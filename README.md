@@ -73,6 +73,18 @@ automation:
 
 Upgrading from 0.1: your existing entry is migrated automatically (entities keep their ids and history).
 
+## Managing users on the scale
+The scale has up to 8 user slots and no screen to manage them. The **Users on scale** sensor (scale
+device, diagnostic) shows how many are in use; its attributes list each slot (name, birth year, `uid`,
+whether it is a person in HA, whether a delete is queued).
+
+* **Remove a person in HA** → the slot HA created for them is deleted from the scale at its next
+  wake-up. A slot HA *adopted* from the vendor app is left alone (it may still be used there).
+* **Delete any other slot** (a test user, a leftover): call `universal_ble_scale.delete_scale_user`
+  on the *Users on scale* sensor with the `uid` from its attributes. It's queued and carried out the
+  next time the scale wakes (step on it, or press **Scan now** first). People configured in HA are
+  refused; remove them from the integration instead.
+
 ## The 12.80 kg bug
 12.80 kg is raw `0x0100`. Live frames are `[start][0x58][flag][weight u16]` with flag `1` while the
 scale settles. Reading the weight from the wrong offset, or trusting the first live frame, yields
@@ -82,8 +94,8 @@ and discard a `0x0100` record that has no impedance/body data (logged as a warni
 anyway, enable debug logging for `custom_components.universal_ble_scale` and send the hex frames.
 
 ## Status / caveats
-* Verified against the openScale / bt-scale sources, the official Sanitas Health Coach app's protocol
-  code and a simulated scale; real-hardware testing is ongoing. With several people configured we do
+* Working on a real Sanitas SBF70 (single profile, migration, scan window). Protocol checked against
+  openScale, bt-scale and the official Sanitas Health Coach app; multi-person use is lightly tested. With several people configured we do
   not force a measurement for one of them; a weigh-in is picked up live or on the next sync.
 * The advertised BLE name of the SBF70 isn't verified; auto-discovery matches several names.
   If yours isn't discovered, use the manual picker.

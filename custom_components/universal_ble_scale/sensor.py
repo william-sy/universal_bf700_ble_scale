@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
+
+import voluptuous as vol
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -14,10 +17,12 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfMass
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_NICKNAME
+from .const import CONF_NICKNAME, DOMAIN
 from .coordinator import ScaleConfigEntry, ScaleCoordinator, ScaleState
 from .entity import person_device, scale_device
 from .protocol import Measurement
@@ -136,6 +141,12 @@ async def async_setup_entry(
     """Set up sensors."""
     coordinator = entry.runtime_data
     async_add_entities(ScaleLevelSensor(coordinator, d) for d in SCALE_SENSORS)
+    async_add_entities([ScaleUsersSensor(coordinator)])
+    entity_platform.async_get_current_platform().async_register_entity_service(
+        "delete_scale_user",
+        {vol.Required("uid"): cv.string},
+        "async_delete_scale_user",
+    )
     for sid, sub in coordinator.person_subentries().items():
         async_add_entities(
             (
@@ -213,3 +224,60 @@ class PersonSensor(_RestoringSensor):
         return self.entity_description.value_fn(
             measurement, self.coordinator.height_cm(self._subentry_id)
         )
+
+
+class ScaleUsersSensor(_RestoringSensor):
+    """How many user slots the scale holds, and who they are."""
+
+    _attr_translation_key = "scale_users"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: ScaleCoordinator) -> None:
+        """Initialise."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_scale_users"
+        self._attr_device_info = scale_device(coordinator)
+
+    @property
+    def native_value(self) -> Value:
+        """Return the number of slots in use (restored until the first sync)."""
+        users = self.coordinator.data.users
+        return self._restored if users is None else len(users)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """List every slot; ``in_home_assistant`` marks the ones we manage."""
+        coordinator = self.coordinator
+        mine = {uid for uid, _ in coordinator.known.values()}
+        queued = set(coordinator.pending_delete())
+        return {
+            "users": [
+                {
+                    "slot": u.index,
+                    "name": u.name,
+                    "birth_year": u.birth_year,
+                    "uid": f"{u.uid:x}",
+                    "in_home_assistant": u.uid in mine,
+                    "delete_queued": u.uid in queued,
+                }
+                for u in (coordinator.data.users or ())
+            ],
+            "pending_delete": sorted(f"{u:x}" for u in queued),
+        }
+
+    async def async_delete_scale_user(self, uid: str) -> None:
+        """Queue a slot for deletion; it happens the next time the scale wakes."""
+        try:
+            value = int(uid.strip().lower().removeprefix("0x"), 16)
+        except ValueError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="invalid_uid"
+            ) from err
+        if value in {u for u, _ in self.coordinator.known.values()}:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="uid_in_use",
+                translation_placeholders={"uid": uid},
+            )
+        self.coordinator.async_queue_delete(value)

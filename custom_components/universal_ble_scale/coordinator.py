@@ -28,6 +28,8 @@ from .const import (
     CONF_HEIGHT,
     CONF_NICKNAME,
     CONF_SEX,
+    CONF_ADOPTED,
+    CONF_PENDING_DELETE,
     CONF_UID,
     DEFAULT_SCAN_MINUTES,
     DOMAIN,
@@ -36,7 +38,7 @@ from .const import (
     SEX_MALE,
     SUBENTRY_PERSON,
 )
-from .protocol import Measurement, UserProfile
+from .protocol import Measurement, RemoteUser, UserProfile
 from .session import Person, ScaleSession, SessionError
 
 _LOGGER = logging.getLogger(__name__)
@@ -51,6 +53,7 @@ class ScaleState:
     battery: int | None = None
     last_sync: datetime | None = None
     measurements: Mapping[str, Measurement] = field(default_factory=dict)
+    users: tuple[RemoteUser, ...] | None = None  # slots on the scale, once synced
 
 
 def profile_from_data(data: Mapping[str, Any]) -> UserProfile:
@@ -85,6 +88,7 @@ class ScaleCoordinator(DataUpdateCoordinator[ScaleState]):
         self.scale_name: str | None = entry.data.get("name")
         self.data = ScaleState()
         self.signature = people_signature(entry)
+        self.known = self.build_known()
         self.scan_minutes = DEFAULT_SCAN_MINUTES
         self._armed_until = 0.0
         self._unarm: CALLBACK_TYPE | None = None
@@ -109,6 +113,27 @@ class ScaleCoordinator(DataUpdateCoordinator[ScaleState]):
             Person(sid, int(sub.data[CONF_UID], 16), profile_from_data(sub.data))
             for sid, sub in self.person_subentries().items()
         ]
+
+    def build_known(self) -> dict[str, tuple[int, bool]]:
+        """Map person -> (uid, adopted from another app)."""
+        return {
+            sid: (int(sub.data[CONF_UID], 16), bool(sub.data.get(CONF_ADOPTED)))
+            for sid, sub in self.person_subentries().items()
+        }
+
+    def pending_delete(self) -> list[int]:
+        """Return the uids queued for deletion from the scale."""
+        return [int(u, 16) for u in self.config_entry.data.get(CONF_PENDING_DELETE, [])]
+
+    @callback
+    def async_queue_delete(self, uid: int) -> None:
+        """Queue a scale slot for deletion at the next sync."""
+        queued = {f"{u:x}" for u in self.pending_delete()} | {f"{uid:x}"}
+        self.hass.config_entries.async_update_entry(
+            self.config_entry,
+            data={**self.config_entry.data, CONF_PENDING_DELETE: sorted(queued)},
+        )
+        self.async_update_listeners()
 
     def height_cm(self, subentry_id: str) -> int:
         """Return a person's height."""
@@ -223,7 +248,11 @@ class ScaleCoordinator(DataUpdateCoordinator[ScaleState]):
             kwargs["measure_timeout"] = ARMED_MAX_WAIT
         try:
             result = await ScaleSession(
-                client, self.scale_name, self.people(), **kwargs
+                client,
+                self.scale_name,
+                self.people(),
+                delete_uids=self.pending_delete(),
+                **kwargs,
             ).run()
         except (SessionError, BleakError, TimeoutError) as err:
             _LOGGER.debug("%s: session failed: %s", self.address, err)
@@ -239,8 +268,20 @@ class ScaleCoordinator(DataUpdateCoordinator[ScaleState]):
                 self.hass.config_entries.async_update_subentry(
                     self.config_entry,
                     sub,
-                    data={**sub.data, CONF_UID: f"{uid:x}"},
+                    data={**sub.data, CONF_UID: f"{uid:x}", CONF_ADOPTED: True},
                 )
+
+        self.known = self.build_known()
+        if result.deleted:
+            remaining = [
+                u
+                for u in self.config_entry.data.get(CONF_PENDING_DELETE, [])
+                if int(u, 16) not in result.deleted
+            ]
+            self.hass.config_entries.async_update_entry(
+                self.config_entry,
+                data={**self.config_entry.data, CONF_PENDING_DELETE: remaining},
+            )
 
         latest = dict(self.data.measurements)
         for key, measurements in result.measurements.items():
@@ -262,6 +303,7 @@ class ScaleCoordinator(DataUpdateCoordinator[ScaleState]):
                 if result.battery is not None
                 else self.data.battery,
                 last_sync=datetime.now(UTC),
+                users=tuple(result.users),
                 measurements=latest,
             )
         )

@@ -212,3 +212,89 @@ async def test_migrate_second_v1_entry_for_same_scale_merges(hass: HomeAssistant
     await hass.async_block_till_done()
     assert {s.unique_id for s in primary.subentries.values()} == {"BOB", "ANN"}
     assert hass.config_entries.async_get_entry(other.entry_id) is None
+
+
+async def _run_session_with(hass, result):
+    client, patcher, session = _session(result)
+    try:
+        with patch(CONNECT, AsyncMock(return_value=client)):
+            entry = await _setup(hass)
+            inject(make_info())
+            await hass.async_block_till_done(wait_background_tasks=True)
+    finally:
+        patcher.stop()
+    return entry, session
+
+
+async def test_users_sensor_lists_slots_and_flags_ours(hass: HomeAssistant) -> None:
+    from custom_components.universal_ble_scale.protocol import RemoteUser
+
+    result = SessionResult(
+        battery=90,
+        users=[RemoteUser(1, 2, 0x1234, "BOB", 1990), RemoteUser(2, 2, 0x777, "FAK", 1980)],
+    )
+    await _run_session_with(hass, result)
+    state = hass.states.get("sensor.sanitas_sbf70_users_on_scale")
+    assert state.state == "2"
+    users = state.attributes["users"]
+    assert users[0]["in_home_assistant"] is True
+    assert users[1]["in_home_assistant"] is False and users[1]["uid"] == "777"
+
+
+async def test_delete_service_queues_and_session_clears_it(hass: HomeAssistant) -> None:
+    client, patcher, session = _session(SessionResult(battery=90, deleted=[0x777]))
+    try:
+        with patch(CONNECT, AsyncMock(return_value=client)):
+            entry = await _setup(hass)
+            await hass.services.async_call(
+                DOMAIN, "delete_scale_user",
+                {"entity_id": "sensor.sanitas_sbf70_users_on_scale", "uid": "0x777"},
+                blocking=True,
+            )
+            assert entry.data["pending_delete"] == ["777"]
+            # "Scan now" clears the cooldown left by the session run at setup
+            await hass.services.async_call(
+                "button", "press", {"entity_id": "button.sanitas_sbf70_scan_now"},
+                blocking=True,
+            )
+            await hass.async_block_till_done(wait_background_tasks=True)
+            assert session.call_args.kwargs["delete_uids"] == [0x777]
+    finally:
+        patcher.stop()
+    assert entry.data["pending_delete"] == []
+
+
+async def test_delete_service_rejects_configured_person_and_garbage(
+    hass: HomeAssistant,
+) -> None:
+    import pytest
+    from homeassistant.exceptions import ServiceValidationError
+
+    entry = await _setup(hass)
+    for uid in ("1234", "zzz"):
+        with pytest.raises(ServiceValidationError):
+            await hass.services.async_call(
+                DOMAIN, "delete_scale_user",
+                {"entity_id": "sensor.sanitas_sbf70_users_on_scale", "uid": uid},
+                blocking=True,
+            )
+    assert "pending_delete" not in entry.data
+
+
+async def test_removing_person_queues_slot_we_created(hass: HomeAssistant) -> None:
+    entry = await _setup(hass)
+    hass.config_entries.async_remove_subentry(entry, "bobid")
+    await hass.async_block_till_done()
+    assert entry.data["pending_delete"] == ["1234"]
+
+
+async def test_removing_adopted_person_leaves_slot_alone(hass: HomeAssistant) -> None:
+    entry = hub(hass)
+    sub = entry.subentries["bobid"]
+    hass.config_entries.async_update_subentry(entry, sub, data={**sub.data, "adopted": True})
+    inject(make_info())
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    hass.config_entries.async_remove_subentry(entry, "bobid")
+    await hass.async_block_till_done()
+    assert "pending_delete" not in entry.data

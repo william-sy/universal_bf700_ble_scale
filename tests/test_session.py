@@ -102,6 +102,10 @@ class FakeScale:
             for i, (uid, name, year) in enumerate(self.users, 1):
                 n = name.encode().ljust(3, b"\0")
                 self._send(bytes([s, 0x34, len(self.users), i]) + uid.to_bytes(8, "big") + n + bytes([year - 1900]))
+        elif cmd == 0x32:
+            gone = int.from_bytes(data[2:10], "big")
+            self.users = [u for u in self.users if u[0] != gone]
+            self._send(bytes([s, 0xF0, 0x32, 0]))
         elif cmd == 0x31:
             uid = int.from_bytes(data[2:10], "big")
             self.users.append((uid, data[10:13].rstrip(b"\0").decode(), 1900 + data[13]))
@@ -374,3 +378,35 @@ async def test_multi_person_picks_up_record_stored_during_wait():
     scale.write_gatt_char = write
     result = await session(scale, people=[PERSON, ANN]).run()
     assert best(result, "ann").weight_kg == 59.0
+
+
+async def test_queued_user_is_deleted_and_list_refreshed():
+    scale = FakeScale(users=[(UID, "BOB", 1990), (0x777, "FAK", 1980)])
+    result = await ScaleSession(scale, "SANITAS SBF70", [PERSON], measure_timeout=0.5,
+                                step_timeout=1.0, delete_uids=[0x777]).run()
+    assert result.deleted == [0x777]
+    assert [u.uid for u in result.users] == [UID]
+    assert scale.users == [(UID, "BOB", 1990)]
+
+
+async def test_never_deletes_a_configured_person():
+    scale = FakeScale(users=[(UID, "BOB", 1990)])
+    result = await ScaleSession(scale, "SANITAS SBF70", [PERSON], measure_timeout=0.5,
+                                step_timeout=1.0, delete_uids=[UID]).run()
+    assert result.deleted == []
+    assert scale.users == [(UID, "BOB", 1990)]
+
+
+async def test_delete_of_already_missing_user_counts_as_done():
+    scale = FakeScale(users=[(UID, "BOB", 1990)])
+    result = await ScaleSession(scale, "SANITAS SBF70", [PERSON], measure_timeout=0.5,
+                                step_timeout=1.0, delete_uids=[0x555]).run()
+    assert result.deleted == [0x555]
+    assert not any(w[1:2] == b"\x32" for w in scale.written)
+
+
+async def test_users_reported_in_result():
+    scale = FakeScale(users=[(UID, "BOB", 1990), (0x99, "ANN", 1985)])
+    result = await session(scale, people=[PERSON]).run()
+    assert {(u.uid, u.name, u.birth_year) for u in result.users} == {
+        (UID, "BOB", 1990), (0x99, "ANN", 1985)}

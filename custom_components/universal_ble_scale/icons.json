@@ -18,6 +18,9 @@
       },
       "impedance": {
         "default": "mdi:sine-wave"
+      },
+      "scale_users": {
+        "default": "mdi:account-multiple"
       }
     },
     "button": {
@@ -37,6 +40,11 @@
       "scan_duration": {
         "default": "mdi:timer-outline"
       }
+    }
+  },
+  "services": {
+    "delete_scale_user": {
+      "service": "mdi:account-remove"
     }
   }
 }

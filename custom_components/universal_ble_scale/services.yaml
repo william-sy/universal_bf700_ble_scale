@@ -1,0 +1,11 @@
+delete_scale_user:
+  target:
+    entity:
+      integration: universal_ble_scale
+      domain: sensor
+  fields:
+    uid:
+      required: true
+      example: "1a2b3c"
+      selector:
+        text:

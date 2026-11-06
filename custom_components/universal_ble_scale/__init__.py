@@ -117,8 +117,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ScaleConfigEntry) -> boo
 
 async def _async_entry_updated(hass: HomeAssistant, entry: ScaleConfigEntry) -> None:
     """Reload when people are added/removed/edited (not when a uid is adopted)."""
-    if people_signature(entry) != entry.runtime_data.signature:
+    coordinator = entry.runtime_data
+    if people_signature(entry) != coordinator.signature:
+        coordinator.signature = people_signature(entry)  # avoid re-entering
+        # A person was removed: free the slot HA created for them (but never a
+        # slot adopted from another app, which may still be in use there).
+        for sid, (uid, adopted) in coordinator.known.items():
+            if sid not in entry.subentries and not adopted:
+                coordinator.async_queue_delete(uid)
         await hass.config_entries.async_reload(entry.entry_id)
+    else:
+        coordinator.known = coordinator.build_known()
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ScaleConfigEntry) -> bool:

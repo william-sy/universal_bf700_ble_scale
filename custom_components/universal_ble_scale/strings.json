@@ -83,6 +83,9 @@
       },
       "last_sync": {
         "name": "Last sync"
+      },
+      "scale_users": {
+        "name": "Users on scale"
       }
     },
     "binary_sensor": {
@@ -142,6 +145,26 @@
       "abort": {
         "reconfigure_successful": "Profile updated."
       }
+    }
+  },
+  "services": {
+    "delete_scale_user": {
+      "name": "Delete scale user",
+      "description": "Remove a user slot from the scale. It is deleted the next time the scale wakes up. People configured in Home Assistant cannot be deleted this way; remove them from the integration instead.",
+      "fields": {
+        "uid": {
+          "name": "User ID",
+          "description": "The uid shown in the attributes of the 'Users on scale' sensor."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_uid": {
+      "message": "The user ID must be a hexadecimal value from the 'Users on scale' sensor."
+    },
+    "uid_in_use": {
+      "message": "User {uid} belongs to a person configured in Home Assistant. Remove that person from the integration instead."
     }
   }
 }
