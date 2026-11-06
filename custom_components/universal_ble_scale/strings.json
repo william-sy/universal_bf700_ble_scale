@@ -5,15 +5,17 @@
       "user": {
         "title": "Choose your scale",
         "description": "Bluetooth devices seen by Home Assistant (including ESPHome Bluetooth proxies). Step on the scale to wake it so it shows up.",
-        "data": { "address": "Scale" }
+        "data": {
+          "address": "Scale"
+        }
       },
       "bluetooth_confirm": {
         "title": "Set up {name}?",
-        "description": "A compatible Bluetooth scale was found."
+        "description": "A compatible Bluetooth scale was found. Keep it awake (step on it) while you finish setup."
       },
       "profile": {
         "title": "Your profile",
-        "description": "The scale calculates body fat, water, muscle and bone mass itself from this profile, so it is stored on the scale ({name}). Each person on a shared scale needs their own entry.",
+        "description": "The scale calculates body fat, water, muscle and bone mass itself from this profile, so it is stored on the scale ({name}). Each person on a shared scale needs their own entry.\n\n**After you submit: step on the scale within 30 seconds, barefoot, and stay on until it finishes.** Home Assistant can only write your profile to the scale and link your weight to it while the scale is awake. The first weigh-in is what teaches the scale to recognise you by weight.",
         "data": {
           "nickname": "Nickname (up to 3 letters/digits)",
           "height": "Height",
@@ -48,7 +50,12 @@
     }
   },
   "selector": {
-    "sex": { "options": { "male": "Male", "female": "Female" } },
+    "sex": {
+      "options": {
+        "male": "Male",
+        "female": "Female"
+      }
+    },
     "activity": {
       "options": {
         "1": "1 – None",
@@ -61,14 +68,30 @@
   },
   "entity": {
     "sensor": {
-      "weight": { "name": "Weight" },
-      "body_fat": { "name": "Body fat" },
-      "body_water": { "name": "Body water" },
-      "muscle": { "name": "Muscle" },
-      "bone_mass": { "name": "Bone mass" },
-      "bmi": { "name": "BMI" },
-      "impedance": { "name": "Impedance" },
-      "last_measurement": { "name": "Last measurement" }
+      "weight": {
+        "name": "Weight"
+      },
+      "body_fat": {
+        "name": "Body fat"
+      },
+      "body_water": {
+        "name": "Body water"
+      },
+      "muscle": {
+        "name": "Muscle"
+      },
+      "bone_mass": {
+        "name": "Bone mass"
+      },
+      "bmi": {
+        "name": "BMI"
+      },
+      "impedance": {
+        "name": "Impedance"
+      },
+      "last_measurement": {
+        "name": "Last measurement"
+      }
     }
   }
 }

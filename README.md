@@ -14,6 +14,13 @@ Copy `custom_components/universal_ble_scale` into your HA `config/custom_compone
 (or add this repo to HACS as a custom repository), restart, then step on the scale: it should
 be discovered. Otherwise: Settings → Devices → Add Integration → Universal BLE Scale.
 
+## First-time setup of a profile
+Right after you submit the profile, **step on the scale within 30 seconds (barefoot) and stay on until it
+finishes.** The profile can only be written while the scale is awake, and the first weigh-in is what
+teaches the scale to recognise you by weight (it keeps a reference weight per user). If you stepped on
+*before* the profile existed, that weigh-in is stored as "unknown" on the scale and is not imported yet;
+just weigh in again. Repeat this for each additional person.
+
 ## How it works
 The scale sleeps and only advertises when stepped on. On advertisement HA connects, syncs the
 clock, finds (or creates) your user slot, downloads stored measurements or triggers a live one,

@@ -95,7 +95,7 @@ class ScaleSession:
         profile: UserProfile,
         uid: int,
         *,
-        measure_timeout: float = 30.0,
+        measure_timeout: float = 45.0,
         step_timeout: float = 5.0,
         on_live_weight: Callable[[float], None] | None = None,
     ) -> None:
