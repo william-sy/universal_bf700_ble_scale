@@ -1,12 +1,42 @@
 {
   "entity": {
     "sensor": {
-      "body_fat": { "default": "mdi:percent" },
-      "body_water": { "default": "mdi:water-percent" },
-      "muscle": { "default": "mdi:arm-flex" },
-      "bone_mass": { "default": "mdi:bone" },
-      "bmi": { "default": "mdi:human-male-height" },
-      "impedance": { "default": "mdi:sine-wave" }
+      "body_fat": {
+        "default": "mdi:percent"
+      },
+      "body_water": {
+        "default": "mdi:water-percent"
+      },
+      "muscle": {
+        "default": "mdi:arm-flex"
+      },
+      "bone_mass": {
+        "default": "mdi:bone"
+      },
+      "bmi": {
+        "default": "mdi:human-male-height"
+      },
+      "impedance": {
+        "default": "mdi:sine-wave"
+      }
+    },
+    "button": {
+      "scan_now": {
+        "default": "mdi:scale-bathroom"
+      }
+    },
+    "binary_sensor": {
+      "scanning": {
+        "default": "mdi:bluetooth-search",
+        "state": {
+          "on": "mdi:bluetooth-connect"
+        }
+      }
+    },
+    "number": {
+      "scan_duration": {
+        "default": "mdi:timer-outline"
+      }
     }
   }
 }

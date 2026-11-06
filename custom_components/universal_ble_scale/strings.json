@@ -15,7 +15,7 @@
       },
       "profile": {
         "title": "Your profile",
-        "description": "The scale calculates body fat, water, muscle and bone mass itself from this profile, so it is stored on the scale ({name}). Each person on a shared scale needs their own entry.\n\n**After you submit: step on the scale within 30 seconds, barefoot, and stay on until it finishes.** Home Assistant can only write your profile to the scale and link your weight to it while the scale is awake. The first weigh-in is what teaches the scale to recognise you by weight.",
+        "description": "The scale calculates body fat, water, muscle and bone mass itself from this profile, so it is stored on the scale ({name}).\n\n**After you submit: step on the scale within 30 seconds, barefoot, and stay on until it finishes.** Home Assistant can only write your profile to the scale and link your weight to it while the scale is awake. The first weigh-in is what teaches the scale to recognise you by weight.\n\nMore people can be added later from this scale's page (Add person).",
         "data": {
           "nickname": "Nickname (up to 3 letters/digits)",
           "height": "Height",
@@ -27,26 +27,15 @@
           "nickname": "Shown on the scale display. Must be unique per person.",
           "activity": "1 = none … 5 = extreme athlete (affects the body composition formulas)."
         }
-      },
-      "reconfigure": {
-        "title": "Update profile",
-        "description": "Changes are written to the scale the next time it is used.",
-        "data": {
-          "height": "Height",
-          "age": "Age",
-          "sex": "Sex",
-          "activity": "Activity level"
-        }
       }
     },
     "error": {
       "invalid_nickname": "Use 1–3 letters or digits."
     },
     "abort": {
-      "already_configured": "This scale is already set up. To add another person, use Add Integration and pick the scale manually.",
+      "already_configured": "This scale is already set up. To add another person, open the scale in Devices & Services and choose Add person.",
       "already_in_progress": "Setup is already in progress.",
-      "no_devices_found": "No Bluetooth devices found. Step on the scale to wake it and try again.",
-      "reconfigure_successful": "Profile updated."
+      "no_devices_found": "No Bluetooth devices found. Step on the scale to wake it and try again."
     }
   },
   "selector": {
@@ -91,6 +80,67 @@
       },
       "last_measurement": {
         "name": "Last measurement"
+      },
+      "last_sync": {
+        "name": "Last sync"
+      }
+    },
+    "binary_sensor": {
+      "scanning": {
+        "name": "Scanning"
+      }
+    },
+    "button": {
+      "scan_now": {
+        "name": "Scan now"
+      }
+    },
+    "number": {
+      "scan_duration": {
+        "name": "Scan duration"
+      }
+    }
+  },
+  "config_subentries": {
+    "person": {
+      "title": "Person",
+      "initiate_flow": {
+        "user": "Add person"
+      },
+      "entry_type": "Person",
+      "step": {
+        "user": {
+          "title": "Add person",
+          "description": "Each person on the scale needs their own profile and a unique nickname. After you submit, **step on the scale within 30 seconds, barefoot,** so it can learn to recognise you by weight.",
+          "data": {
+            "nickname": "Nickname (up to 3 letters/digits)",
+            "height": "Height",
+            "age": "Age",
+            "sex": "Sex",
+            "activity": "Activity level"
+          },
+          "data_description": {
+            "nickname": "Shown on the scale display. Must be unique per person.",
+            "activity": "1 = none … 5 = extreme athlete (affects the body composition formulas)."
+          }
+        },
+        "reconfigure": {
+          "title": "Update profile",
+          "description": "Changes are written to the scale the next time it is used.",
+          "data": {
+            "height": "Height",
+            "age": "Age",
+            "sex": "Sex",
+            "activity": "Activity level"
+          }
+        }
+      },
+      "error": {
+        "invalid_nickname": "Use 1–3 letters or digits.",
+        "nickname_in_use": "Another person on this scale already uses that nickname."
+      },
+      "abort": {
+        "reconfigure_successful": "Profile updated."
       }
     }
   }

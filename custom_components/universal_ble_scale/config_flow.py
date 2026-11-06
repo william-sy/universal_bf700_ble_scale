@@ -12,7 +12,15 @@ from homeassistant.components.bluetooth import (
     BluetoothServiceInfoBleak,
     async_discovered_service_info,
 )
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    ConfigSubentryData,
+    ConfigSubentryFlow,
+    SubentryFlowResult,
+)
+from homeassistant.core import callback
 from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
@@ -39,6 +47,7 @@ from .const import (
     DOMAIN,
     SEX_FEMALE,
     SEX_MALE,
+    SUBENTRY_PERSON,
 )
 from .protocol import normalize_nickname
 
@@ -101,20 +110,35 @@ def _profile_schema(defaults: dict[str, Any], *, with_nickname: bool) -> vol.Sch
     return vol.Schema(fields)
 
 
-class UniversalBleScaleConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a config flow."""
+def _person_data(user_input: dict[str, Any], nickname: str) -> dict[str, Any]:
+    """Build the stored person data from the profile form."""
+    return {
+        CONF_NICKNAME: nickname,
+        CONF_UID: f"{secrets.randbits(31) | 0x100:x}",
+        CONF_HEIGHT: int(user_input[CONF_HEIGHT]),
+        CONF_BIRTH_DATE: birth_date_for_age(int(user_input[CONF_AGE])).isoformat(),
+        CONF_SEX: user_input[CONF_SEX],
+        CONF_ACTIVITY: int(user_input[CONF_ACTIVITY]),
+    }
 
-    VERSION = 1
+
+class UniversalBleScaleConfigFlow(ConfigFlow, domain=DOMAIN):
+    """Set up a scale (and its first person)."""
+
+    VERSION = 2
 
     def __init__(self) -> None:
         """Initialise."""
         self._discovery: BluetoothServiceInfoBleak | None = None
         self._devices: dict[str, BluetoothServiceInfoBleak] = {}
 
-    def _address_configured(self, address: str) -> bool:
-        return any(
-            e.data.get(CONF_ADDRESS) == address for e in self._async_current_entries()
-        )
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(
+        cls, config_entry: ConfigEntry
+    ) -> dict[str, type[ConfigSubentryFlow]]:
+        """Each person on the scale is a sub-entry."""
+        return {SUBENTRY_PERSON: PersonSubentryFlow}
 
     # -- discovery ---------------------------------------------------------
 
@@ -122,8 +146,6 @@ class UniversalBleScaleConfigFlow(ConfigFlow, domain=DOMAIN):
         self, discovery_info: BluetoothServiceInfoBleak
     ) -> ConfigFlowResult:
         """Handle bluetooth discovery."""
-        if self._address_configured(discovery_info.address):
-            return self.async_abort(reason="already_configured")
         await self.async_set_unique_id(discovery_info.address)
         self._abort_if_unique_id_configured()
         self._discovery = discovery_info
@@ -153,9 +175,15 @@ class UniversalBleScaleConfigFlow(ConfigFlow, domain=DOMAIN):
             address = user_input[CONF_ADDRESS]
             self._discovery = self._devices[address]
             await self.async_set_unique_id(address, raise_on_progress=False)
+            self._abort_if_unique_id_configured()
             return await self.async_step_profile()
 
-        infos = [i for i in async_discovered_service_info(self.hass, True) if i.name]
+        configured = {e.unique_id for e in self._async_current_entries()}
+        infos = [
+            i
+            for i in async_discovered_service_info(self.hass, True)
+            if i.name and i.address not in configured
+        ]
         likely = [i for i in infos if _looks_like_scale(i)]
         self._devices = {i.address: i for i in (likely or infos)}
         if not self._devices:
@@ -176,12 +204,12 @@ class UniversalBleScaleConfigFlow(ConfigFlow, domain=DOMAIN):
             ),
         )
 
-    # -- profile -----------------------------------------------------------
+    # -- first person ------------------------------------------------------
 
     async def async_step_profile(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Collect the user profile that gets stored on the scale."""
+        """Collect the first person's profile."""
         assert self._discovery is not None
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -189,24 +217,17 @@ class UniversalBleScaleConfigFlow(ConfigFlow, domain=DOMAIN):
             if not nickname:
                 errors[CONF_NICKNAME] = "invalid_nickname"
             else:
-                address = self._discovery.address
-                await self.async_set_unique_id(
-                    f"{address}-{nickname}", raise_on_progress=False
-                )
-                self._abort_if_unique_id_configured()
-                birth = birth_date_for_age(int(user_input[CONF_AGE]))
                 return self.async_create_entry(
-                    title=f"{nickname} ({self._discovery.name})",
-                    data={
-                        CONF_ADDRESS: address,
-                        "name": self._discovery.name,
-                        CONF_NICKNAME: nickname,
-                        CONF_UID: f"{secrets.randbits(31) | 0x100:x}",
-                        CONF_HEIGHT: int(user_input[CONF_HEIGHT]),
-                        CONF_BIRTH_DATE: birth.isoformat(),
-                        CONF_SEX: user_input[CONF_SEX],
-                        CONF_ACTIVITY: int(user_input[CONF_ACTIVITY]),
-                    },
+                    title=self._discovery.name,
+                    data={CONF_ADDRESS: self._discovery.address, "name": self._discovery.name},
+                    subentries=[
+                        ConfigSubentryData(
+                            data=_person_data(user_input, nickname),
+                            subentry_type=SUBENTRY_PERSON,
+                            title=nickname,
+                            unique_id=nickname,
+                        )
+                    ],
                 )
         return self.async_show_form(
             step_id="profile",
@@ -215,22 +236,46 @@ class UniversalBleScaleConfigFlow(ConfigFlow, domain=DOMAIN):
             description_placeholders={"name": self._discovery.name},
         )
 
-    # -- reconfigure -------------------------------------------------------
+
+class PersonSubentryFlow(ConfigSubentryFlow):
+    """Add or edit a person on the scale."""
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Add a person."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            nickname = normalize_nickname(user_input[CONF_NICKNAME])
+            taken = {s.unique_id for s in self._get_entry().subentries.values()}
+            if not nickname:
+                errors[CONF_NICKNAME] = "invalid_nickname"
+            elif nickname in taken:
+                errors[CONF_NICKNAME] = "nickname_in_use"
+            else:
+                return self.async_create_entry(
+                    title=nickname,
+                    data=_person_data(user_input, nickname),
+                    unique_id=nickname,
+                )
+        return self.async_show_form(
+            step_id="user",
+            data_schema=_profile_schema(user_input or {}, with_nickname=True),
+            errors=errors,
+        )
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    ) -> SubentryFlowResult:
         """Change height, age, sex or activity; pushed to the scale on next use."""
-        entry = self._get_reconfigure_entry()
-        birth = date.fromisoformat(entry.data[CONF_BIRTH_DATE])
+        subentry = self._get_reconfigure_subentry()
+        birth = date.fromisoformat(subentry.data[CONF_BIRTH_DATE])
         if user_input is not None:
             new_age = int(user_input[CONF_AGE])
-            if new_age == age_on(birth):
-                new_birth = birth  # unchanged: keep the exact date
-            else:
-                new_birth = birth_date_for_age(new_age)
-            return self.async_update_reload_and_abort(
-                entry,
+            new_birth = birth if new_age == age_on(birth) else birth_date_for_age(new_age)
+            return self.async_update_and_abort(
+                self._get_entry(),
+                subentry,
                 data_updates={
                     CONF_HEIGHT: int(user_input[CONF_HEIGHT]),
                     CONF_BIRTH_DATE: new_birth.isoformat(),
@@ -239,10 +284,10 @@ class UniversalBleScaleConfigFlow(ConfigFlow, domain=DOMAIN):
                 },
             )
         defaults = {
-            CONF_HEIGHT: entry.data[CONF_HEIGHT],
+            CONF_HEIGHT: subentry.data[CONF_HEIGHT],
             CONF_AGE: age_on(birth),
-            CONF_SEX: entry.data[CONF_SEX],
-            CONF_ACTIVITY: entry.data[CONF_ACTIVITY],
+            CONF_SEX: subentry.data[CONF_SEX],
+            CONF_ACTIVITY: subentry.data[CONF_ACTIVITY],
         }
         return self.async_show_form(
             step_id="reconfigure",

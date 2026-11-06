@@ -24,3 +24,13 @@ DEFAULT_ACTIVITY = 3
 # advertising for a while after it disconnects and reconnecting in a loop would
 # drain its batteries.
 SESSION_COOLDOWN = 45.0
+
+SUBENTRY_PERSON = "person"
+
+# While a scan window is open ("Scan now") HA is patient: short cooldown and a
+# long wait for the weigh-in after the scale wakes.
+ARMED_COOLDOWN = 5.0
+ARMED_MAX_WAIT = 120.0
+DEFAULT_SCAN_MINUTES = 10
+
+EVENT_MEASUREMENT = f"{DOMAIN}_measurement"

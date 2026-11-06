@@ -14,12 +14,13 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfMass
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import CONF_NICKNAME
 from .coordinator import ScaleConfigEntry, ScaleCoordinator, ScaleState
+from .entity import person_device, scale_device
+from .protocol import Measurement
 
 PARALLEL_UPDATES = 0
 
@@ -27,92 +28,102 @@ type Value = float | int | datetime | None
 
 
 @dataclass(frozen=True, kw_only=True)
+class PersonSensorDescription(SensorEntityDescription):
+    """Per-person sensor description."""
+
+    value_fn: Callable[[Measurement, int], Value]
+
+
+@dataclass(frozen=True, kw_only=True)
 class ScaleSensorDescription(SensorEntityDescription):
-    """Sensor description with a value extractor."""
+    """Scale-level sensor description."""
 
-    value_fn: Callable[[ScaleCoordinator, ScaleState], Value]
-
-
-def _bmi(coordinator: ScaleCoordinator, state: ScaleState) -> float | None:
-    if state.measurement is None:
-        return None
-    height_m = coordinator.profile.height_cm / 100
-    return round(state.measurement.weight_kg / height_m**2, 1)
+    value_fn: Callable[[ScaleState], Value]
 
 
-SENSORS: tuple[ScaleSensorDescription, ...] = (
-    ScaleSensorDescription(
+PERSON_SENSORS: tuple[PersonSensorDescription, ...] = (
+    PersonSensorDescription(
         key="weight",
         translation_key="weight",
         device_class=SensorDeviceClass.WEIGHT,
         native_unit_of_measurement=UnitOfMass.KILOGRAMS,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
-        value_fn=lambda c, s: s.measurement.weight_kg if s.measurement else None,
+        value_fn=lambda m, h: m.weight_kg,
     ),
-    ScaleSensorDescription(
+    PersonSensorDescription(
         key="body_fat",
         translation_key="body_fat",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
-        value_fn=lambda c, s: s.measurement.body_fat if s.measurement else None,
+        value_fn=lambda m, h: m.body_fat,
     ),
-    ScaleSensorDescription(
+    PersonSensorDescription(
         key="body_water",
         translation_key="body_water",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
-        value_fn=lambda c, s: s.measurement.body_water if s.measurement else None,
+        value_fn=lambda m, h: m.body_water,
     ),
-    ScaleSensorDescription(
+    PersonSensorDescription(
         key="muscle",
         translation_key="muscle",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
-        value_fn=lambda c, s: s.measurement.muscle if s.measurement else None,
+        value_fn=lambda m, h: m.muscle,
     ),
-    ScaleSensorDescription(
+    PersonSensorDescription(
         key="bone_mass",
         translation_key="bone_mass",
         device_class=SensorDeviceClass.WEIGHT,
         native_unit_of_measurement=UnitOfMass.KILOGRAMS,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
-        value_fn=lambda c, s: s.measurement.bone_kg if s.measurement else None,
+        value_fn=lambda m, h: m.bone_kg,
     ),
-    ScaleSensorDescription(
+    PersonSensorDescription(
         key="bmi",
         translation_key="bmi",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
-        value_fn=_bmi,
+        value_fn=lambda m, h: round(m.weight_kg / (h / 100) ** 2, 1),
     ),
-    ScaleSensorDescription(
+    PersonSensorDescription(
         key="impedance",
         translation_key="impedance",
         native_unit_of_measurement="Ω",
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
-        value_fn=lambda c, s: s.measurement.impedance if s.measurement else None,
+        value_fn=lambda m, h: m.impedance,
     ),
+    PersonSensorDescription(
+        key="last_measurement",
+        translation_key="last_measurement",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda m, h: m.timestamp,
+    ),
+)
+
+SCALE_SENSORS: tuple[ScaleSensorDescription, ...] = (
     ScaleSensorDescription(
         key="battery",
         device_class=SensorDeviceClass.BATTERY,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda c, s: s.battery,
+        value_fn=lambda s: s.battery,
     ),
     ScaleSensorDescription(
-        key="last_measurement",
-        translation_key="last_measurement",
+        key="last_sync",
+        translation_key="last_sync",
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda c, s: s.measurement.timestamp if s.measurement else None,
+        value_fn=lambda s: s.last_sync,
     ),
 )
 
@@ -124,31 +135,22 @@ async def async_setup_entry(
 ) -> None:
     """Set up sensors."""
     coordinator = entry.runtime_data
-    async_add_entities(ScaleSensor(coordinator, d) for d in SENSORS)
+    async_add_entities(ScaleLevelSensor(coordinator, d) for d in SCALE_SENSORS)
+    for sid, sub in coordinator.person_subentries().items():
+        async_add_entities(
+            (
+                PersonSensor(coordinator, sid, sub.data[CONF_NICKNAME], d)
+                for d in PERSON_SENSORS
+            ),
+            config_subentry_id=sid,
+        )
 
 
-class ScaleSensor(CoordinatorEntity[ScaleCoordinator], RestoreSensor):
-    """A scale sensor. The scale is asleep most of the time, so state is restored."""
+class _RestoringSensor(CoordinatorEntity[ScaleCoordinator], RestoreSensor):
+    """The scale sleeps most of the time, so restore the last value."""
 
     _attr_has_entity_name = True
-    entity_description: ScaleSensorDescription
-
-    def __init__(
-        self, coordinator: ScaleCoordinator, description: ScaleSensorDescription
-    ) -> None:
-        """Initialise."""
-        super().__init__(coordinator)
-        self.entity_description = description
-        entry = coordinator.config_entry
-        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            connections={("bluetooth", coordinator.address)},
-            name=entry.title,
-            manufacturer="Beurer / Sanitas",
-            model=coordinator.scale_name,
-        )
-        self._restored: Value = None
+    _restored: Value = None
 
     async def async_added_to_hass(self) -> None:
         """Restore the last value."""
@@ -161,15 +163,53 @@ class ScaleSensor(CoordinatorEntity[ScaleCoordinator], RestoreSensor):
         """Always available: no data just means nobody stepped on the scale yet."""
         return True
 
+
+class ScaleLevelSensor(_RestoringSensor):
+    """Battery, last sync."""
+
+    entity_description: ScaleSensorDescription
+
+    def __init__(
+        self, coordinator: ScaleCoordinator, description: ScaleSensorDescription
+    ) -> None:
+        """Initialise."""
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{description.key}"
+        self._attr_device_info = scale_device(coordinator)
+
     @property
     def native_value(self) -> Value:
-        """Return the value, or the restored one until the source has data."""
-        data = self.coordinator.data
-        has_source = (
-            data.battery is not None
-            if self.entity_description.key == "battery"
-            else data.measurement is not None
-        )
-        if not has_source:
+        """Return the value or the restored one."""
+        value = self.entity_description.value_fn(self.coordinator.data)
+        return self._restored if value is None else value
+
+
+class PersonSensor(_RestoringSensor):
+    """One person's measurement value."""
+
+    entity_description: PersonSensorDescription
+
+    def __init__(
+        self,
+        coordinator: ScaleCoordinator,
+        subentry_id: str,
+        name: str,
+        description: PersonSensorDescription,
+    ) -> None:
+        """Initialise."""
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._subentry_id = subentry_id
+        self._attr_unique_id = f"{subentry_id}_{description.key}"
+        self._attr_device_info = person_device(coordinator, subentry_id, name)
+
+    @property
+    def native_value(self) -> Value:
+        """Return the value, or the restored one until there is a measurement."""
+        measurement = self.coordinator.data.measurements.get(self._subentry_id)
+        if measurement is None:
             return self._restored
-        return self.entity_description.value_fn(self.coordinator, data)
+        return self.entity_description.value_fn(
+            measurement, self.coordinator.height_cm(self._subentry_id)
+        )

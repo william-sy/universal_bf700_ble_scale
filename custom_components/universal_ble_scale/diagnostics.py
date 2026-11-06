@@ -18,10 +18,19 @@ async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: ScaleConfigEntry
 ) -> dict[str, Any]:
     """Return diagnostics."""
-    state = entry.runtime_data.data
+    coordinator = entry.runtime_data
+    state = coordinator.data
     return {
         "entry": async_redact_data(dict(entry.data), TO_REDACT),
-        "scale_name": entry.runtime_data.scale_name,
+        "scale_name": coordinator.scale_name,
+        "scanning": coordinator.scanning,
         "battery": state.battery,
-        "last_measurement": asdict(state.measurement) if state.measurement else None,
+        "last_sync": state.last_sync.isoformat() if state.last_sync else None,
+        "people": [
+            async_redact_data(dict(sub.data), TO_REDACT)
+            for sub in coordinator.person_subentries().values()
+        ],
+        "last_measurements": {
+            sid: asdict(m) for sid, m in state.measurements.items()
+        },
     }

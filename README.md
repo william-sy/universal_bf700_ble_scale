@@ -21,6 +21,10 @@ teaches the scale to recognise you by weight (it keeps a reference weight per us
 *before* the profile existed, that weigh-in is stored as "unknown" on the scale and is not imported yet;
 just weigh in again. Repeat this for each additional person.
 
+**Tip:** the Bluetooth symbol on the scale's display means Home Assistant is connected. Wait for it
+before stepping on (the first weigh-in may be stored as "unknown" if you step on too early), then
+weigh in again. Once the scale has learned you, it recognises you by weight and this isn't needed.
+
 ## How it works
 The scale sleeps and only advertises when stepped on. On advertisement HA connects, syncs the
 clock, finds (or creates) your user slot, downloads stored measurements or triggers a live one,
@@ -30,12 +34,44 @@ The **scale calculates body fat / water / muscle / bone itself** from the profil
 height, age, sex and activity level are written to the scale. Use bare feet on the electrodes or
 you only get weight. Change the profile via ⋮ → Reconfigure; it is pushed on next use.
 
-One config entry per person. A second person on the same scale: Add Integration → pick the
-scale manually and use a different 3-character nickname. If you already have a user on the scale
-from the vendor app (same nickname + birth year) it is adopted instead of duplicated.
+**One entry per scale, one sub-entry per person.** The scale holds the Bluetooth device, battery,
+last sync and the scan controls; each person (up to 8 on the scale) has their own profile and
+sensors. Add people from the scale's page → **Add person** (each needs a unique 3-character nickname;
+edit one via its ⋮ → Reconfigure). A person already on the scale from the vendor app (same nickname
++ birth year) is adopted instead of duplicated. One connection per wake-up serves everyone and also
+drains stored weigh-ins so the scale's memory can't fill up.
 
-Sensors: weight, body fat, body water, muscle, bone mass, BMI (calculated), impedance (disabled by
-default), battery, last measurement. Last values are restored after restart.
+Every weigh-in is announced as a `universal_ble_scale_measurement` event (person, timestamp, weight,
+body composition), so piled-up history isn't lost even though the sensors show the newest value.
+
+Per person: weight, body fat, body water, muscle, bone mass, BMI (calculated), impedance (disabled by
+default), last measurement. Per scale: battery, last sync, scanning, **Scan now** button and
+**Scan duration** number. Last values are restored after restart.
+
+## Scan now
+HA cannot wake a sleeping scale, only the scale's own step-on does that. **Scan now** opens a scan
+window (length = *Scan duration*, default 10 min) in which HA is patient: no cooldown between
+sessions and up to 2 minutes of waiting for the weigh-in after the scale wakes. If the scale is
+already awake it connects immediately. Press it, then step on. Automate a regular weigh-in:
+
+```yaml
+automation:
+  - alias: Saturday weigh-in window
+    triggers:
+      - trigger: time
+        at: "10:00:00"
+    conditions:
+      - condition: time
+        weekday: [sat]
+    actions:
+      - action: number.set_value
+        target: {entity_id: number.sanitas_sbf70_scan_duration}
+        data: {value: 60}
+      - action: button.press
+        target: {entity_id: button.sanitas_sbf70_scan_now}
+```
+
+Upgrading from 0.1: your existing entry is migrated automatically (entities keep their ids and history).
 
 ## The 12.80 kg bug
 12.80 kg is raw `0x0100`. Live frames are `[start][0x58][flag][weight u16]` with flag `1` while the
@@ -46,8 +82,9 @@ and discard a `0x0100` record that has no impedance/body data (logged as a warni
 anyway, enable debug logging for `custom_components.universal_ble_scale` and send the hex frames.
 
 ## Status / caveats
-* Developed against the reference sources and a simulated scale, **not yet tested on real hardware**.
-  Frame offsets for the full record follow openScale; bt-scale differs slightly.
+* Verified against the openScale / bt-scale sources, the official Sanitas Health Coach app's protocol
+  code and a simulated scale; real-hardware testing is ongoing. With several people configured we do
+  not force a measurement for one of them; a weigh-in is picked up live or on the next sync.
 * The advertised BLE name of the SBF70 isn't verified; auto-discovery matches several names.
   If yours isn't discovered, use the manual picker.
 * Quality scale: all rules but strict typing (mypy) are addressed, tests cover ~95%. Not an official

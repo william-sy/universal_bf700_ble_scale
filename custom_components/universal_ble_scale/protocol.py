@@ -51,6 +51,12 @@ CMD_DO_MEASUREMENT = 0x40
 CMD_GET_SAVED = 0x41
 CMD_SAVED_MEASUREMENT = 0x42  # scale -> app
 CMD_DELETE_SAVED = 0x43
+CMD_SET_USER_WEIGHT = 0x44  # sets the reference weight used to recognise the user
+CMD_GET_USER_WEIGHT = 0x45
+CMD_GET_UNKNOWN = 0x46
+CMD_UNKNOWN_INFO = 0x47  # scale -> app
+CMD_ASSIGN_UNKNOWN = 0x4B
+CMD_UNKNOWN_LIVE = 0x4C  # scale -> app (weigh-in nobody owns, body comp included)
 CMD_SET_UNIT = 0x4D
 CMD_SCALE_STATUS = 0x4F
 CMD_LIVE_WEIGHT = 0x58  # scale -> app
@@ -59,6 +65,11 @@ CMD_SCALE_ACK = 0xF0  # scale -> app
 CMD_APP_ACK = 0xF1  # app -> scale
 
 UNIT_KG = 0x01
+
+# Record layout (verified against the official Sanitas Health Coach app): a
+# measurement is split over two frames of 15 bytes, each contributing the 11
+# bytes at [4:15]. Anything after byte 14 is padding and must not be joined.
+PAYLOAD_SLICE = slice(4, 15)
 
 # Weight is transmitted as a big-endian uint16 in units of 50 g.
 WEIGHT_STEP_KG = 0.05
@@ -370,14 +381,16 @@ class RecordAssembler:
     ``current`` starts a record and an even one completes it.
 
     Live records (0x59): part 1 carries the owner uid at bytes 5..12, parts 2
-    and up carry data from byte 4; the record is complete at ``current ==
-    count``.
+    and 3 carry data; complete at ``current == count``.
+
+    Unowned live records (0x4C): like 0x59 but without a uid, two parts.
     """
 
     def __init__(self) -> None:
         """Initialise empty buffers."""
         self._saved = b""
         self._live = b""
+        self._unknown = b""
         self.live_uid: int | None = None
 
     def feed_saved(self, frame: bytes) -> bytes | None:
@@ -385,9 +398,9 @@ class RecordAssembler:
         if len(frame) < 5:
             return None
         if frame[3] % 2:
-            self._saved = bytes(frame[4:])
+            self._saved = bytes(frame[PAYLOAD_SLICE])
             return None
-        buf = self._saved + bytes(frame[4:])
+        buf = self._saved + bytes(frame[PAYLOAD_SLICE])
         self._saved = b""
         return buf
 
@@ -400,8 +413,99 @@ class RecordAssembler:
             self.live_uid = int.from_bytes(frame[5:13], "big")
             self._live = b""
             return None, None
-        self._live = bytes(frame[4:]) if current == 2 else self._live + bytes(frame[4:])
+        payload = bytes(frame[PAYLOAD_SLICE])
+        self._live = payload if current == 2 else self._live + payload
         if current >= count:
             buf, self._live = self._live, b""
             return self.live_uid, buf
         return None, None
+
+    def feed_unknown(self, frame: bytes) -> bytes | None:
+        """Feed a 0x4C frame; return the buffer when the record completes."""
+        if len(frame) < 5:
+            return None
+        count, current = frame[2], frame[3]
+        payload = bytes(frame[PAYLOAD_SLICE])
+        self._unknown = payload if current == 1 else self._unknown + payload
+        if current >= count:
+            buf, self._unknown = self._unknown, b""
+            return buf
+        return None
+
+
+@dataclass(frozen=True, slots=True)
+class UnknownMeasurement:
+    """A weigh-in the scale could not attribute to a user (0x47 frame)."""
+
+    ident: int
+    timestamp_raw: int
+    raw_weight: int
+    impedance: int
+
+    @property
+    def epoch(self) -> int:
+        """Return the Unix timestamp."""
+        return self.timestamp_raw & 0x7FFFFFFF
+
+
+def parse_unknown_info(frame: bytes) -> UnknownMeasurement | None:
+    """Parse ``[start][47][count][cur][id][ts4][w2][imp2]``."""
+    if len(frame) < 13 or frame[1] != CMD_UNKNOWN_INFO:
+        return None
+    return UnknownMeasurement(
+        ident=frame[4],
+        timestamp_raw=int.from_bytes(frame[5:9], "big"),
+        raw_weight=int.from_bytes(frame[9:11], "big"),
+        impedance=int.from_bytes(frame[11:13], "big"),
+    )
+
+
+def build_assign_unknown(start: int, uid: int, unknown: UnknownMeasurement) -> bytes:
+    """Build ``[start][4B][uid8][ts4][w2][imp2][id]``."""
+    return build_command(
+        start,
+        CMD_ASSIGN_UNKNOWN,
+        encode_uid(uid)
+        + unknown.timestamp_raw.to_bytes(4, "big")
+        + unknown.raw_weight.to_bytes(2, "big")
+        + unknown.impedance.to_bytes(2, "big")
+        + bytes([unknown.ident]),
+    )
+
+
+def build_set_user_weight(
+    start: int, uid: int, raw_weight: int, fat_tenths: int, timestamp_raw: int
+) -> bytes:
+    """Build ``[start][44][uid8][w2][fat2][ts4]`` (sets the reference weight)."""
+    return build_command(
+        start,
+        CMD_SET_USER_WEIGHT,
+        encode_uid(uid)
+        + raw_weight.to_bytes(2, "big")
+        + fat_tenths.to_bytes(2, "big")
+        + timestamp_raw.to_bytes(4, "big"),
+    )
+
+
+def has_reference_weight(frame: bytes) -> bool:
+    """Parse the reply to 0x45: a short reply means no reference weight yet."""
+    return (
+        len(frame) >= 12
+        and frame[1] == CMD_SCALE_ACK
+        and frame[2] == CMD_GET_USER_WEIGHT
+        and int.from_bytes(frame[8:10], "big") > 0
+    )
+
+
+def weight_only_measurement(unknown: UnknownMeasurement) -> Measurement:
+    """Build a measurement from the little the 0x47 list gives us."""
+    return Measurement(
+        timestamp=datetime.fromtimestamp(unknown.epoch, UTC),
+        raw_weight=unknown.raw_weight,
+        weight_kg=round(unknown.raw_weight * WEIGHT_STEP_KG, 2),
+        impedance=unknown.impedance or None,
+        body_fat=None,
+        body_water=None,
+        muscle=None,
+        bone_kg=None,
+    )
