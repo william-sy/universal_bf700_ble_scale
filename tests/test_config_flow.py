@@ -169,3 +169,33 @@ async def test_reconfigure_keeps_exact_birth_date_if_age_unchanged(
 def test_birth_date_helpers() -> None:
     assert birth_date_for_age(30, date(2024, 2, 29)) == date(1994, 2, 28)
     assert age_on(date(1990, 6, 1), date(2026, 5, 31)) == 35
+
+
+def test_manifest_matchers_cover_the_family_and_are_valid() -> None:
+    import json
+    from pathlib import Path
+
+    from homeassistant.components.bluetooth.match import (
+        _local_name_to_index_key,
+        ble_device_matches,
+    )
+
+    manifest = json.loads(Path("custom_components/universal_ble_scale/manifest.json").read_text())
+    matchers = manifest["bluetooth"]
+    for matcher in matchers:
+        _local_name_to_index_key(matcher["local_name"])  # raises if too broad
+
+    def hits(name: str) -> bool:
+        return any(ble_device_matches(m, make_info(name)) for m in matchers)
+
+    for name in (
+        "SANITAS SBF70",
+        "SilverCrest SBF75",
+        "Beurer BF710",
+        "BF-800",
+        "Libra-B",
+        "AICDSCALE1",
+    ):
+        assert hits(name), name
+    for name in ("SANITAS SBF72", "Beurer BM 27", "Some Other Device"):
+        assert not hits(name), name

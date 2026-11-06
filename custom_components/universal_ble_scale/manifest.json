@@ -2,22 +2,82 @@
   "domain": "universal_ble_scale",
   "name": "Universal BLE Scale",
   "bluetooth": [
-    {"local_name": "SBF7*", "connectable": true},
-    {"local_name": "SANITAS*", "connectable": true},
-    {"local_name": "Sanitas*", "connectable": true},
-    {"local_name": "SILVERCREST*", "connectable": true},
-    {"local_name": "SilverCrest*", "connectable": true},
-    {"local_name": "BF700*", "connectable": true},
-    {"local_name": "BF710*", "connectable": true},
-    {"local_name": "BF800*", "connectable": true},
-    {"local_name": "BF-800*", "connectable": true},
-    {"local_name": "BF-700*", "connectable": true},
-    {"local_name": "Beurer BF*", "connectable": true},
-    {"local_name": "Libra-*", "connectable": true}
+    {
+      "local_name": "SANITAS SBF70*",
+      "connectable": true
+    },
+    {
+      "local_name": "SANITAS SBF75*",
+      "connectable": true
+    },
+    {
+      "local_name": "SBF70*",
+      "connectable": true
+    },
+    {
+      "local_name": "SBF75*",
+      "connectable": true
+    },
+    {
+      "local_name": "SILVERCREST SBF75*",
+      "connectable": true
+    },
+    {
+      "local_name": "SilverCrest SBF75*",
+      "connectable": true
+    },
+    {
+      "local_name": "Beurer BF70*",
+      "connectable": true
+    },
+    {
+      "local_name": "Beurer BF71*",
+      "connectable": true
+    },
+    {
+      "local_name": "Beurer BF80*",
+      "connectable": true
+    },
+    {
+      "local_name": "BF-700*",
+      "connectable": true
+    },
+    {
+      "local_name": "BF-800*",
+      "connectable": true
+    },
+    {
+      "local_name": "BF700*",
+      "connectable": true
+    },
+    {
+      "local_name": "BF710*",
+      "connectable": true
+    },
+    {
+      "local_name": "BF800*",
+      "connectable": true
+    },
+    {
+      "local_name": "Libra-B*",
+      "connectable": true
+    },
+    {
+      "local_name": "Libra-W*",
+      "connectable": true
+    },
+    {
+      "local_name": "AICDSCALE1*",
+      "connectable": true
+    }
   ],
-  "codeowners": ["@william-sy"],
+  "codeowners": [
+    "@william-sy"
+  ],
   "config_flow": true,
-  "dependencies": ["bluetooth_adapters"],
+  "dependencies": [
+    "bluetooth_adapters"
+  ],
   "documentation": "https://github.com/william-sy/ha_universal_ble_scale",
   "integration_type": "device",
   "iot_class": "local_push",
