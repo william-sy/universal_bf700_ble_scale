@@ -1,0 +1,12 @@
+{
+  "entity": {
+    "sensor": {
+      "body_fat": { "default": "mdi:percent" },
+      "body_water": { "default": "mdi:water-percent" },
+      "muscle": { "default": "mdi:arm-flex" },
+      "bone_mass": { "default": "mdi:bone" },
+      "bmi": { "default": "mdi:human-male-height" },
+      "impedance": { "default": "mdi:sine-wave" }
+    }
+  }
+}
