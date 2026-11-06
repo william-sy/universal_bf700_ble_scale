@@ -1,1 +1,4 @@
-{ "name": "Universal BLE Scale", "homeassistant": "2025.1.0" }
+{
+  "name": "Universal BLE Scale",
+  "homeassistant": "2026.10.0"
+}

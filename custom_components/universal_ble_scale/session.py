@@ -11,19 +11,18 @@ wait for a live weigh-in.
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections import defaultdict
 from collections.abc import Callable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-import logging
 from typing import Any, Protocol
 
 from .protocol import (
     CHAR_UUID,
     CMD_ASSIGN_UNKNOWN,
     CMD_DELETE_SAVED,
-    CMD_USER_DELETE,
     CMD_DO_MEASUREMENT,
     CMD_GET_SAVED,
     CMD_GET_UNKNOWN,
@@ -37,6 +36,7 @@ from .protocol import (
     CMD_UNKNOWN_INFO,
     CMD_UNKNOWN_LIVE,
     CMD_USER_ADD,
+    CMD_USER_DELETE,
     CMD_USER_DETAILS,
     CMD_USER_INFO,
     CMD_USER_LIST,
@@ -253,7 +253,7 @@ class ScaleSession:
             await self._write(build_init(start))
             try:
                 await self._expect(
-                    lambda f: f[0] == alt_start(start, NIBBLE_INIT), timeout=4.0
+                    lambda f, start=start: f[0] == alt_start(start, NIBBLE_INIT), timeout=4.0
                 )
             except SessionError:
                 _LOGGER.debug("No init ack with start byte 0x%02x", start)
@@ -278,9 +278,7 @@ class ScaleSession:
         ack = await self._expect(lambda f: is_scale_ack(f, self._start, CMD_USER_LIST))
         if (ack[4] if len(ack) > 4 else 0) == 0:
             return
-        await self._expect(
-            lambda f: f[1] == CMD_USER_INFO and len(f) > 3 and f[3] >= f[2]
-        )
+        await self._expect(lambda f: f[1] == CMD_USER_INFO and len(f) > 3 and f[3] >= f[2])
 
     async def _delete_users(self) -> None:
         """Delete queued slots from the scale (never a configured person)."""
@@ -324,9 +322,7 @@ class ScaleSession:
         details = parse_user_details(ack)
         if details is None or details_match_profile(details, person.profile):
             return
-        _LOGGER.info(
-            "Updating profile stored on the scale for %s", person.profile.nickname
-        )
+        _LOGGER.info("Updating profile stored on the scale for %s", person.profile.nickname)
         upd = await self._request(CMD_USER_UPDATE, person.profile.payload(uid))
         if len(upd) < 4 or upd[3] != 0:
             _LOGGER.warning("Scale rejected profile update (status %s)", upd[3:4].hex())
@@ -362,9 +358,7 @@ class ScaleSession:
         if len(ack) < 4 or ack[3] == 1:  # 1 == none stored
             return
         with suppress(SessionError):
-            await self._expect(
-                lambda f: f[1] == CMD_UNKNOWN_INFO and len(f) > 3 and f[3] >= f[2]
-            )
+            await self._expect(lambda f: f[1] == CMD_UNKNOWN_INFO and len(f) > 3 and f[3] >= f[2])
         now = datetime.now(UTC).timestamp()
         recent = [
             u
@@ -376,9 +370,7 @@ class ScaleSession:
 
         has_ref: dict[str, bool] = {}
         for person in self._people:
-            reply = await self._request(
-                CMD_GET_USER_WEIGHT, encode_uid(self._uids[person.key])
-            )
+            reply = await self._request(CMD_GET_USER_WEIGHT, encode_uid(self._uids[person.key]))
             has_ref[person.key] = has_reference_weight(reply)
 
         target: Person | None = None
@@ -395,9 +387,7 @@ class ScaleSession:
         uid = self._uids[target.key]
         unknown = recent[-1]
         await self._write(build_assign_unknown(self._start, uid, unknown))
-        ack = await self._expect(
-            lambda f: is_scale_ack(f, self._start, CMD_ASSIGN_UNKNOWN)
-        )
+        ack = await self._expect(lambda f: is_scale_ack(f, self._start, CMD_ASSIGN_UNKNOWN))
         if len(ack) < 4 or ack[3] != 0:
             _LOGGER.warning("Scale rejected assignment (status %s)", ack[3:4].hex())
             return
@@ -405,9 +395,7 @@ class ScaleSession:
         with suppress(SessionError):  # the scale may follow up with a full record
             await self._expect(lambda _f: bool(self._live[uid]), 3.0)
         if not self._live[uid]:
-            measurement = (
-                decode_measurement(self._unknown_live) if self._unknown_live else None
-            )
+            measurement = decode_measurement(self._unknown_live) if self._unknown_live else None
             if measurement is None or not measurement.is_valid:
                 measurement = weight_only_measurement(unknown)
             if measurement.is_valid:
@@ -425,9 +413,7 @@ class ScaleSession:
                         unknown.timestamp_raw,
                     )
                 )
-                await self._expect(
-                    lambda f: is_scale_ack(f, self._start, CMD_SET_USER_WEIGHT)
-                )
+                await self._expect(lambda f: is_scale_ack(f, self._start, CMD_SET_USER_WEIGHT))
 
     async def _measure(self) -> None:
         """Wait for a live weigh-in.
@@ -484,9 +470,7 @@ class ScaleSession:
 
             for person in self._people:
                 uid = self._uids[person.key]
-                found = sorted(
-                    [*self._saved[uid], *self._live[uid]], key=lambda m: m.timestamp
-                )
+                found = sorted([*self._saved[uid], *self._live[uid]], key=lambda m: m.timestamp)
                 if found:
                     self._result.measurements[person.key] = found
                     await self._delete_saved(uid)

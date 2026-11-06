@@ -16,8 +16,12 @@ from .helpers import ADDR, inject, make_info
 
 PROFILE_INPUT = {"nickname": "bob!", "height": 180, "age": 34, "sex": "male", "activity": "3"}
 PERSON = {
-    "nickname": "BOB", "uid": "1234", "height": 180, "birth_date": "1990-05-17",
-    "sex": "male", "activity": 3,
+    "nickname": "BOB",
+    "uid": "1234",
+    "height": 180,
+    "birth_date": "1990-05-17",
+    "sex": "male",
+    "activity": 3,
 }
 
 
@@ -29,8 +33,13 @@ def hub(hass: HomeAssistant, **kw) -> MockConfigEntry:
         unique_id=ADDR,
         data={"address": ADDR, "name": "SANITAS SBF70"},
         subentries_data=[
-            {"data": PERSON, "subentry_type": "person", "title": "BOB",
-             "unique_id": "BOB", "subentry_id": "bobid"}
+            {
+                "data": PERSON,
+                "subentry_type": "person",
+                "title": "BOB",
+                "unique_id": "BOB",
+                "subentry_id": "bobid",
+            }
         ],
         **kw,
     )
@@ -103,9 +112,7 @@ async def test_add_person_subentry(hass: HomeAssistant) -> None:
         (entry.entry_id, "person"), context={"source": SOURCE_USER}
     )
     assert result["step_id"] == "user"
-    dup = await hass.config_entries.subentries.async_configure(
-        result["flow_id"], PROFILE_INPUT
-    )
+    dup = await hass.config_entries.subentries.async_configure(result["flow_id"], PROFILE_INPUT)
     assert dup["errors"] == {"nickname": "nickname_in_use"}
     bad = await hass.config_entries.subentries.async_configure(
         result["flow_id"], {**PROFILE_INPUT, "nickname": "?"}

@@ -27,9 +27,9 @@ the scale; Home Assistant only decodes the result.
 
 from __future__ import annotations
 
+import struct
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-import struct
 
 SERVICE_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb"
 CHAR_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb"
@@ -124,9 +124,7 @@ def build_init(start: int) -> bytes:
 
 def build_set_time(start: int, when: datetime) -> bytes:
     """Build the set-time frame (4-byte big-endian Unix time)."""
-    return bytes([alt_start(start, NIBBLE_SET_TIME)]) + int(when.timestamp()).to_bytes(
-        4, "big"
-    )
+    return bytes([alt_start(start, NIBBLE_SET_TIME)]) + int(when.timestamp()).to_bytes(4, "big")
 
 
 def build_app_ack(start: int, frame: bytes) -> bytes:
@@ -136,12 +134,7 @@ def build_app_ack(start: int, frame: bytes) -> bytes:
 
 def is_scale_ack(frame: bytes, start: int, cmd: int) -> bool:
     """Return True if ``frame`` is the scale's 0xF0 ack for ``cmd``."""
-    return (
-        len(frame) >= 4
-        and frame[0] == start
-        and frame[1] == CMD_SCALE_ACK
-        and frame[2] == cmd
-    )
+    return len(frame) >= 4 and frame[0] == start and frame[1] == CMD_SCALE_ACK and frame[2] == cmd
 
 
 # --- user profile -----------------------------------------------------------
@@ -301,8 +294,7 @@ class Measurement:
     def has_body_composition(self) -> bool:
         """Return True if the scale produced body composition values."""
         return any(
-            v is not None
-            for v in (self.body_fat, self.body_water, self.muscle, self.bone_kg)
+            v is not None for v in (self.body_fat, self.body_water, self.muscle, self.bone_kg)
         )
 
     @property
@@ -325,9 +317,7 @@ def decode_measurement(buf: bytes, *, now: datetime | None = None) -> Measuremen
     """Decode the 16-byte measurement record."""
     if len(buf) < 16:
         return None
-    ts, raw_weight, impedance, fat, water, muscle, bone = struct.unpack(
-        ">IHHHHHH", buf[:16]
-    )
+    ts, raw_weight, impedance, fat, water, muscle, bone = struct.unpack(">IHHHHHH", buf[:16])
     ts &= 0x7FFFFFFF  # bit 31 is set by some firmwares (openScale #1500)
     now = now or datetime.now(UTC)
     try:

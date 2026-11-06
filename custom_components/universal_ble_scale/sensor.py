@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 import voluptuous as vol
-from dataclasses import dataclass
-from datetime import datetime
-
 from homeassistant.components.sensor import (
     RestoreSensor,
     SensorDeviceClass,
@@ -17,8 +16,9 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfMass
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import config_validation as cv, entity_platform
+from homeassistant.exceptions import ServiceValidationError, Unauthorized
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -149,10 +149,7 @@ async def async_setup_entry(
     )
     for sid, sub in coordinator.person_subentries().items():
         async_add_entities(
-            (
-                PersonSensor(coordinator, sid, sub.data[CONF_NICKNAME], d)
-                for d in PERSON_SENSORS
-            ),
+            (PersonSensor(coordinator, sid, sub.data[CONF_NICKNAME], d) for d in PERSON_SENSORS),
             config_subentry_id=sid,
         )
 
@@ -180,9 +177,7 @@ class ScaleLevelSensor(_RestoringSensor):
 
     entity_description: ScaleSensorDescription
 
-    def __init__(
-        self, coordinator: ScaleCoordinator, description: ScaleSensorDescription
-    ) -> None:
+    def __init__(self, coordinator: ScaleCoordinator, description: ScaleSensorDescription) -> None:
         """Initialise."""
         super().__init__(coordinator)
         self.entity_description = description
@@ -230,6 +225,8 @@ class ScaleUsersSensor(_RestoringSensor):
     """How many user slots the scale holds, and who they are."""
 
     _attr_translation_key = "scale_users"
+    # Names/birth years of slots are only for the live UI, not the history DB.
+    _unrecorded_attributes = frozenset({"users", "pending_delete"})
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_state_class = SensorStateClass.MEASUREMENT
 
@@ -268,6 +265,12 @@ class ScaleUsersSensor(_RestoringSensor):
 
     async def async_delete_scale_user(self, uid: str) -> None:
         """Queue a slot for deletion; it happens the next time the scale wakes."""
+        # Entity services are open to every user; deleting a slot is admin-only.
+        # Automations and the system carry no user id and are allowed.
+        if (user_id := self._context.user_id if self._context else None) is not None:
+            user = await self.hass.auth.async_get_user(user_id)
+            if user is None or not user.is_admin:
+                raise Unauthorized(context=self._context)
         try:
             value = int(uid.strip().lower().removeprefix("0x"), 16)
         except ValueError as err:

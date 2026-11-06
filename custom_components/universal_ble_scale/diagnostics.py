@@ -8,10 +8,16 @@ from typing import Any
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_ADDRESS, CONF_BIRTH_DATE, CONF_NICKNAME, CONF_UID
+from .const import (
+    CONF_ADDRESS,
+    CONF_BIRTH_DATE,
+    CONF_NICKNAME,
+    CONF_PENDING_DELETE,
+    CONF_UID,
+)
 from .coordinator import ScaleConfigEntry
 
-TO_REDACT = {CONF_ADDRESS, CONF_BIRTH_DATE, CONF_NICKNAME, CONF_UID}
+TO_REDACT = {CONF_ADDRESS, CONF_BIRTH_DATE, CONF_NICKNAME, CONF_PENDING_DELETE, CONF_UID}
 
 
 async def async_get_config_entry_diagnostics(
@@ -30,7 +36,5 @@ async def async_get_config_entry_diagnostics(
             async_redact_data(dict(sub.data), TO_REDACT)
             for sub in coordinator.person_subentries().values()
         ],
-        "last_measurements": {
-            sid: asdict(m) for sid, m in state.measurements.items()
-        },
+        "last_measurements": {sid: asdict(m) for sid, m in state.measurements.items()},
     }

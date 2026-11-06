@@ -6,10 +6,10 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from bleak.exc import BleakError
-
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_capture_events,
@@ -55,8 +55,9 @@ async def test_setup_unload_unknown_state_and_devices(hass: HomeAssistant) -> No
     devs = dr.async_get(hass)
     scale = devs.async_get_device_by_identifier((DOMAIN, entry.entry_id), entry.entry_id)
     assert scale is not None
-    person = devs.async_get_device_by_identifier((DOMAIN, "bobid"), entry.entry_id) \
-        or devs.async_get_child_device_by_identifier((DOMAIN, "bobid"), entry.entry_id)
+    person = devs.async_get_device_by_identifier(
+        (DOMAIN, "bobid"), entry.entry_id
+    ) or devs.async_get_child_device_by_identifier((DOMAIN, "bobid"), entry.entry_id)
     assert person is not None
     assert person.via_device_id == scale.id
     assert await hass.config_entries.async_unload(entry.entry_id)
@@ -134,12 +135,15 @@ async def test_scan_now_opens_window_and_is_patient(hass: HomeAssistant) -> None
             await _setup(hass)
             assert hass.states.get("binary_sensor.sanitas_sbf70_scanning").state == "off"
             await hass.services.async_call(
-                "number", "set_value",
+                "number",
+                "set_value",
                 {"entity_id": "number.sanitas_sbf70_scan_duration", "value": 30},
                 blocking=True,
             )
             await hass.services.async_call(
-                "button", "press", {"entity_id": "button.sanitas_sbf70_scan_now"},
+                "button",
+                "press",
+                {"entity_id": "button.sanitas_sbf70_scan_now"},
                 blocking=True,
             )
             await hass.async_block_till_done(wait_background_tasks=True)
@@ -149,8 +153,11 @@ async def test_scan_now_opens_window_and_is_patient(hass: HomeAssistant) -> None
             assert kwargs["measure_timeout"] == 120.0
             assert hass.states.get("sensor.bob_weight").state == "82.4"
             # window closes after the configured 30 minutes
-            async_fire_time_changed(hass, datetime.now(UTC).replace(microsecond=0)
-                                    + __import__("datetime").timedelta(minutes=31))
+            async_fire_time_changed(
+                hass,
+                datetime.now(UTC).replace(microsecond=0)
+                + __import__("datetime").timedelta(minutes=31),
+            )
             await hass.async_block_till_done()
             assert hass.states.get("binary_sensor.sanitas_sbf70_scanning").state == "off"
     finally:
@@ -164,7 +171,10 @@ async def test_scan_duration_default_and_restore(hass: HomeAssistant) -> None:
 
 async def test_no_people_means_no_session(hass: HomeAssistant) -> None:
     entry = MockConfigEntry(
-        domain=DOMAIN, version=2, title="SANITAS SBF70", unique_id=ADDR,
+        domain=DOMAIN,
+        version=2,
+        title="SANITAS SBF70",
+        unique_id=ADDR,
         data={"address": ADDR, "name": "SANITAS SBF70"},
     )
     entry.add_to_hass(hass)
@@ -178,13 +188,19 @@ async def test_no_people_means_no_session(hass: HomeAssistant) -> None:
 
 async def test_migrate_v1_entry_keeps_entities(hass: HomeAssistant) -> None:
     old = MockConfigEntry(
-        domain=DOMAIN, version=1, title="BOB (SANITAS SBF70)", unique_id=f"{ADDR}-BOB",
+        domain=DOMAIN,
+        version=1,
+        title="BOB (SANITAS SBF70)",
+        unique_id=f"{ADDR}-BOB",
         data={"address": ADDR, "name": "SANITAS SBF70", **PERSON},
     )
     old.add_to_hass(hass)
     reg = er.async_get(hass)
     reg.async_get_or_create(
-        "sensor", DOMAIN, f"{old.entry_id}_weight", config_entry=old,
+        "sensor",
+        DOMAIN,
+        f"{old.entry_id}_weight",
+        config_entry=old,
         suggested_object_id="bob_weight",
     )
     inject(make_info())
@@ -203,9 +219,15 @@ async def test_migrate_v1_entry_keeps_entities(hass: HomeAssistant) -> None:
 async def test_migrate_second_v1_entry_for_same_scale_merges(hass: HomeAssistant) -> None:
     primary = hub(hass)
     other = MockConfigEntry(
-        domain=DOMAIN, version=1, title="ANN (SANITAS SBF70)", unique_id=f"{ADDR}-ANN",
-        data={"address": ADDR, "name": "SANITAS SBF70",
-              **{**PERSON, "nickname": "ANN", "uid": "99"}},
+        domain=DOMAIN,
+        version=1,
+        title="ANN (SANITAS SBF70)",
+        unique_id=f"{ADDR}-ANN",
+        data={
+            "address": ADDR,
+            "name": "SANITAS SBF70",
+            **{**PERSON, "nickname": "ANN", "uid": "99"},
+        },
     )
     other.add_to_hass(hass)
     await hass.config_entries.async_setup(other.entry_id)
@@ -247,14 +269,17 @@ async def test_delete_service_queues_and_session_clears_it(hass: HomeAssistant) 
         with patch(CONNECT, AsyncMock(return_value=client)):
             entry = await _setup(hass)
             await hass.services.async_call(
-                DOMAIN, "delete_scale_user",
+                DOMAIN,
+                "delete_scale_user",
                 {"entity_id": "sensor.sanitas_sbf70_users_on_scale", "uid": "0x777"},
                 blocking=True,
             )
             assert entry.data["pending_delete"] == ["777"]
             # "Scan now" clears the cooldown left by the session run at setup
             await hass.services.async_call(
-                "button", "press", {"entity_id": "button.sanitas_sbf70_scan_now"},
+                "button",
+                "press",
+                {"entity_id": "button.sanitas_sbf70_scan_now"},
                 blocking=True,
             )
             await hass.async_block_till_done(wait_background_tasks=True)
@@ -274,7 +299,8 @@ async def test_delete_service_rejects_configured_person_and_garbage(
     for uid in ("1234", "zzz"):
         with pytest.raises(ServiceValidationError):
             await hass.services.async_call(
-                DOMAIN, "delete_scale_user",
+                DOMAIN,
+                "delete_scale_user",
                 {"entity_id": "sensor.sanitas_sbf70_users_on_scale", "uid": uid},
                 blocking=True,
             )
@@ -298,3 +324,25 @@ async def test_removing_adopted_person_leaves_slot_alone(hass: HomeAssistant) ->
     hass.config_entries.async_remove_subentry(entry, "bobid")
     await hass.async_block_till_done()
     assert "pending_delete" not in entry.data
+
+
+async def test_delete_service_requires_admin_for_user_calls(hass: HomeAssistant) -> None:
+    import pytest
+    from homeassistant.core import Context
+    from homeassistant.exceptions import Unauthorized
+
+    entry = await _setup(hass)
+    await hass.auth.async_create_user("owner")  # the first user is always the owner
+    user = await hass.auth.async_create_user("guest", group_ids=["system-users"])
+    admin = await hass.auth.async_create_user("boss", group_ids=["system-admin"])
+    data = {"entity_id": "sensor.sanitas_sbf70_users_on_scale", "uid": "777"}
+    assert not user.is_admin and admin.is_admin
+    with pytest.raises(Unauthorized):
+        await hass.services.async_call(
+            DOMAIN, "delete_scale_user", data, blocking=True, context=Context(user_id=user.id)
+        )
+    assert "pending_delete" not in entry.data
+    await hass.services.async_call(
+        DOMAIN, "delete_scale_user", data, blocking=True, context=Context(user_id=admin.id)
+    )
+    assert entry.data["pending_delete"] == ["777"]

@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, date, datetime
 import struct
+from datetime import UTC, date, datetime
 
 import pytest
 
 from custom_components.universal_ble_scale.protocol import (
     CHAR_UUID,
-    Measurement,
     UserProfile,
     decode_measurement,
     parse_live_weight,
@@ -29,11 +28,11 @@ ANN = Person("ann", 0x99, UserProfile("Ann", 165, date(1985, 1, 2), False, 2))
 NOW = int(datetime.now(UTC).timestamp())
 
 
-def record(weight_kg: float, *, imp=500, fat=215, water=550, muscle=420, bone=60,
-           ts=NOW) -> bytes:
+def record(weight_kg: float, *, imp=500, fat=215, water=550, muscle=420, bone=60, ts=NOW) -> bytes:
     """22-byte record: ts, weight, imp, fat, water, muscle, bone, bmr, amr, bmi."""
-    return struct.pack(">IHHHHHH", ts, round(weight_kg / 0.05), imp, fat, water, muscle,
-                       bone) + bytes(6)
+    return struct.pack(
+        ">IHHHHHH", ts, round(weight_kg / 0.05), imp, fat, water, muscle, bone
+    ) + bytes(6)
 
 
 def frames_for_record(start: int, cmd: int, rec: bytes, uid: int | None = None):
@@ -58,8 +57,9 @@ def frames_for_record(start: int, cmd: int, rec: bytes, uid: int | None = None):
 class FakeScale:
     """Minimal scale simulator speaking the E7 or F7 dialect."""
 
-    def __init__(self, start=0xE7, users=(), saved=(), live=None, speaks=None,
-                 unknown=(), reference=False):
+    def __init__(
+        self, start=0xE7, users=(), saved=(), live=None, speaks=None, unknown=(), reference=False
+    ):
         self.start = start
         self.speaks = speaks or start
         self.users = list(users)  # (uid, name, year)
@@ -101,7 +101,12 @@ class FakeScale:
             self._send(bytes([s, 0xF0, 0x33, 0, len(self.users), 8]))
             for i, (uid, name, year) in enumerate(self.users, 1):
                 n = name.encode().ljust(3, b"\0")
-                self._send(bytes([s, 0x34, len(self.users), i]) + uid.to_bytes(8, "big") + n + bytes([year - 1900]))
+                self._send(
+                    bytes([s, 0x34, len(self.users), i])
+                    + uid.to_bytes(8, "big")
+                    + n
+                    + bytes([year - 1900])
+                )
         elif cmd == 0x32:
             gone = int.from_bytes(data[2:10], "big")
             self.users = [u for u in self.users if u[0] != gone]
@@ -123,8 +128,12 @@ class FakeScale:
             self._send(bytes([s, 0xF0, 0x43, 0]))
         elif cmd == 0x45:
             if self.reference:
-                self._send(bytes([s, 0xF0, 0x45, 0]) + NOW.to_bytes(4, "big")
-                           + (1300).to_bytes(2, "big") + (200).to_bytes(2, "big"))
+                self._send(
+                    bytes([s, 0xF0, 0x45, 0])
+                    + NOW.to_bytes(4, "big")
+                    + (1300).to_bytes(2, "big")
+                    + (200).to_bytes(2, "big")
+                )
             else:
                 self._send(bytes([s, 0xF0, 0x45, 1]))
         elif cmd == 0x46:
@@ -133,9 +142,12 @@ class FakeScale:
             else:
                 self._send(bytes([s, 0xF0, 0x46, 0]))
                 for i, (ident, ts, w, imp) in enumerate(self.unknown, 1):
-                    self._send(bytes([s, 0x47, len(self.unknown), i, ident])
-                               + ts.to_bytes(4, "big") + w.to_bytes(2, "big")
-                               + imp.to_bytes(2, "big"))
+                    self._send(
+                        bytes([s, 0x47, len(self.unknown), i, ident])
+                        + ts.to_bytes(4, "big")
+                        + w.to_bytes(2, "big")
+                        + imp.to_bytes(2, "big")
+                    )
             if self.push_live and self.live:
                 self._send(*self.live)
         elif cmd == 0x4B:
@@ -154,8 +166,9 @@ class FakeScale:
 
 
 def session(scale: FakeScale, name="SANITAS SBF70", people=None, **kw):
-    return ScaleSession(scale, name, people or [PERSON], measure_timeout=1.0,
-                        step_timeout=1.0, **kw)
+    return ScaleSession(
+        scale, name, people or [PERSON], measure_timeout=1.0, step_timeout=1.0, **kw
+    )
 
 
 def best(result, key="bob"):
@@ -197,23 +210,28 @@ async def test_adds_unknown_user():
 
 
 async def test_adopts_user_created_by_other_app():
-    scale = FakeScale(users=[(0xABCD, "BOB", 1990)],
-                      live=frames_for_record(0xE7, 0x59, record(61.0), 0xABCD))
+    scale = FakeScale(
+        users=[(0xABCD, "BOB", 1990)], live=frames_for_record(0xE7, 0x59, record(61.0), 0xABCD)
+    )
     result = await session(scale).run()
     assert result.adopted == {"bob": 0xABCD}
     assert best(result).weight_kg == 61.0
 
 
 async def test_other_users_measurement_ignored():
-    scale = FakeScale(users=[(UID, "BOB", 1990)],
-                      live=frames_for_record(0xE7, 0x59, record(95.0), 0x9999))
+    scale = FakeScale(
+        users=[(UID, "BOB", 1990)], live=frames_for_record(0xE7, 0x59, record(95.0), 0x9999)
+    )
     result = await session(scale).run()
     assert best(result) is None
 
 
 async def test_f7_dialect_autodetected_despite_name():
-    scale = FakeScale(start=0xF7, users=[(UID, "BOB", 1990)],
-                      live=frames_for_record(0xF7, 0x59, record(75.0), UID))
+    scale = FakeScale(
+        start=0xF7,
+        users=[(UID, "BOB", 1990)],
+        live=frames_for_record(0xF7, 0x59, record(75.0), UID),
+    )
     # Name hints E7 first; session must fall back to F7.
     result = await session(scale, name="Some Scale").run()
     assert best(result).weight_kg == 75.0
@@ -221,8 +239,7 @@ async def test_f7_dialect_autodetected_despite_name():
 
 async def test_stuck_12_80_placeholder_is_discarded():
     rec = record(12.8, imp=0, fat=0, water=0, muscle=0, bone=0)
-    scale = FakeScale(users=[(UID, "BOB", 1990)],
-                      live=frames_for_record(0xE7, 0x59, rec, UID))
+    scale = FakeScale(users=[(UID, "BOB", 1990)], live=frames_for_record(0xE7, 0x59, rec, UID))
     result = await session(scale).run()
     assert best(result) is None
     assert result.discarded
@@ -285,8 +302,7 @@ async def test_first_weighin_before_profile_is_adopted():
 
 async def test_unknown_with_full_body_composition_from_live_frame():
     live = frames_for_record(0xE7, 0x4C, record(70.0))
-    scale = FakeScale(users=[(UID, "BOB", 1990)], live=live, reference=True,
-                      unknown=[])
+    scale = FakeScale(users=[(UID, "BOB", 1990)], live=live, reference=True, unknown=[])
     # Weigh-in arrives live as unowned; the scale lists it once we ask again.
     orig = scale.write_gatt_char
 
@@ -314,8 +330,9 @@ async def test_unknown_not_assigned_when_it_could_be_someone_else():
 
 
 async def test_stale_unknown_not_assigned():
-    scale = FakeScale(users=[(UID, "BOB", 1990)],
-                      unknown=[(7, NOW - 3 * 3600, 1300, 500)], reference=True)
+    scale = FakeScale(
+        users=[(UID, "BOB", 1990)], unknown=[(7, NOW - 3 * 3600, 1300, 500)], reference=True
+    )
     result = await session(scale).run()
     assert scale.assigned is None
     assert best(result) is None
@@ -382,8 +399,9 @@ async def test_multi_person_picks_up_record_stored_during_wait():
 
 async def test_queued_user_is_deleted_and_list_refreshed():
     scale = FakeScale(users=[(UID, "BOB", 1990), (0x777, "FAK", 1980)])
-    result = await ScaleSession(scale, "SANITAS SBF70", [PERSON], measure_timeout=0.5,
-                                step_timeout=1.0, delete_uids=[0x777]).run()
+    result = await ScaleSession(
+        scale, "SANITAS SBF70", [PERSON], measure_timeout=0.5, step_timeout=1.0, delete_uids=[0x777]
+    ).run()
     assert result.deleted == [0x777]
     assert [u.uid for u in result.users] == [UID]
     assert scale.users == [(UID, "BOB", 1990)]
@@ -391,16 +409,18 @@ async def test_queued_user_is_deleted_and_list_refreshed():
 
 async def test_never_deletes_a_configured_person():
     scale = FakeScale(users=[(UID, "BOB", 1990)])
-    result = await ScaleSession(scale, "SANITAS SBF70", [PERSON], measure_timeout=0.5,
-                                step_timeout=1.0, delete_uids=[UID]).run()
+    result = await ScaleSession(
+        scale, "SANITAS SBF70", [PERSON], measure_timeout=0.5, step_timeout=1.0, delete_uids=[UID]
+    ).run()
     assert result.deleted == []
     assert scale.users == [(UID, "BOB", 1990)]
 
 
 async def test_delete_of_already_missing_user_counts_as_done():
     scale = FakeScale(users=[(UID, "BOB", 1990)])
-    result = await ScaleSession(scale, "SANITAS SBF70", [PERSON], measure_timeout=0.5,
-                                step_timeout=1.0, delete_uids=[0x555]).run()
+    result = await ScaleSession(
+        scale, "SANITAS SBF70", [PERSON], measure_timeout=0.5, step_timeout=1.0, delete_uids=[0x555]
+    ).run()
     assert result.deleted == [0x555]
     assert not any(w[1:2] == b"\x32" for w in scale.written)
 
@@ -409,4 +429,6 @@ async def test_users_reported_in_result():
     scale = FakeScale(users=[(UID, "BOB", 1990), (0x99, "ANN", 1985)])
     result = await session(scale, people=[PERSON]).run()
     assert {(u.uid, u.name, u.birth_year) for u in result.users} == {
-        (UID, "BOB", 1990), (0x99, "ANN", 1985)}
+        (UID, "BOB", 1990),
+        (0x99, "ANN", 1985),
+    }

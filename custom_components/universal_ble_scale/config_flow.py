@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import date
 import secrets
+from datetime import date
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant.components.bluetooth import (
     BluetoothServiceInfoBleak,
     async_discovered_service_info,
@@ -51,8 +50,19 @@ from .const import (
 )
 from .protocol import normalize_nickname
 
-_NAME_HINTS = ("sbf7", "sanitas", "silvercrest", "bf700", "bf710", "bf-7", "bf-8",
-               "bf800", "beurer", "libra", "aicdscale")
+_NAME_HINTS = (
+    "sbf7",
+    "sanitas",
+    "silvercrest",
+    "bf700",
+    "bf710",
+    "bf-7",
+    "bf-8",
+    "bf800",
+    "beurer",
+    "libra",
+    "aicdscale",
+)
 
 
 def _looks_like_scale(info: BluetoothServiceInfoBleak) -> bool:
@@ -82,9 +92,12 @@ def _profile_schema(defaults: dict[str, Any], *, with_nickname: bool) -> vol.Sch
         )
     fields.update(
         {
-            vol.Required(CONF_HEIGHT, default=defaults.get(CONF_HEIGHT, DEFAULT_HEIGHT)): NumberSelector(
-                NumberSelectorConfig(min=100, max=220, step=1, unit_of_measurement="cm",
-                                     mode=NumberSelectorMode.BOX)
+            vol.Required(
+                CONF_HEIGHT, default=defaults.get(CONF_HEIGHT, DEFAULT_HEIGHT)
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=100, max=220, step=1, unit_of_measurement="cm", mode=NumberSelectorMode.BOX
+                )
             ),
             vol.Required(CONF_AGE, default=defaults.get(CONF_AGE, DEFAULT_AGE)): NumberSelector(
                 NumberSelectorConfig(min=10, max=100, step=1, mode=NumberSelectorMode.BOX)
@@ -167,9 +180,7 @@ class UniversalBleScaleConfigFlow(ConfigFlow, domain=DOMAIN):
 
     # -- manual ------------------------------------------------------------
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Pick a scale from the Bluetooth devices HA can see."""
         if user_input is not None:
             address = user_input[CONF_ADDRESS]
@@ -240,9 +251,7 @@ class UniversalBleScaleConfigFlow(ConfigFlow, domain=DOMAIN):
 class PersonSubentryFlow(ConfigSubentryFlow):
     """Add or edit a person on the scale."""
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> SubentryFlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         """Add a person."""
         errors: dict[str, str] = {}
         if user_input is not None:

@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
-import logging
-import time
 from typing import Any
 
 from bleak.exc import BleakError
 from bleak_retry_connector import BleakClientWithServiceCache, establish_connection
-
 from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry, ConfigSubentry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
@@ -24,12 +23,12 @@ from .const import (
     ARMED_MAX_WAIT,
     CONF_ACTIVITY,
     CONF_ADDRESS,
+    CONF_ADOPTED,
     CONF_BIRTH_DATE,
     CONF_HEIGHT,
     CONF_NICKNAME,
-    CONF_SEX,
-    CONF_ADOPTED,
     CONF_PENDING_DELETE,
+    CONF_SEX,
     CONF_UID,
     DEFAULT_SCAN_MINUTES,
     DOMAIN,
@@ -157,9 +156,7 @@ class ScaleCoordinator(DataUpdateCoordinator[ScaleState]):
         self._next_allowed = 0.0
         self.async_update_listeners()
         # If the scale is already awake, go straight in.
-        last = bluetooth.async_last_service_info(
-            self.hass, self.address, connectable=True
-        )
+        last = bluetooth.async_last_service_info(self.hass, self.address, connectable=True)
         if last is not None and time.monotonic() - last.time < 15:
             self._async_maybe_start(last.name)
 
@@ -176,9 +173,7 @@ class ScaleCoordinator(DataUpdateCoordinator[ScaleState]):
             bluetooth.async_register_callback(
                 self.hass,
                 self._async_on_advertisement,
-                bluetooth.BluetoothCallbackMatcher(
-                    address=self.address, connectable=True
-                ),
+                bluetooth.BluetoothCallbackMatcher(address=self.address, connectable=True),
                 bluetooth.BluetoothScanningMode.ACTIVE,
             )
         )
@@ -223,9 +218,7 @@ class ScaleCoordinator(DataUpdateCoordinator[ScaleState]):
             self._next_allowed = time.monotonic() + cooldown
 
     def _ble_device(self):  # noqa: ANN202
-        return bluetooth.async_ble_device_from_address(
-            self.hass, self.address, connectable=True
-        )
+        return bluetooth.async_ble_device_from_address(self.hass, self.address, connectable=True)
 
     async def _async_session(self) -> None:
         if (device := self._ble_device()) is None:
@@ -293,15 +286,11 @@ class ScaleCoordinator(DataUpdateCoordinator[ScaleState]):
                 if previous is not None and m.timestamp <= previous.timestamp:
                     continue  # duplicate
                 latest[key] = m
-                self.hass.bus.async_fire(
-                    EVENT_MEASUREMENT, _event_data(self, sub, m)
-                )
+                self.hass.bus.async_fire(EVENT_MEASUREMENT, _event_data(self, sub, m))
         self.async_set_updated_data(
             replace(
                 self.data,
-                battery=result.battery
-                if result.battery is not None
-                else self.data.battery,
+                battery=result.battery if result.battery is not None else self.data.battery,
                 last_sync=datetime.now(UTC),
                 users=tuple(result.users),
                 measurements=latest,

@@ -86,9 +86,7 @@ def _move_entities(
 ) -> None:
     """Keep entity ids/history: re-key the old per-person entities."""
     if subentry is None:
-        subentry = next(
-            s for s in new.subentries.values() if s.unique_id == person[CONF_NICKNAME]
-        )
+        subentry = next(s for s in new.subentries.values() if s.unique_id == person[CONF_NICKNAME])
     reg = er.async_get(hass)
     for ent in er.async_entries_for_config_entry(reg, old.entry_id):
         prefix = f"{old.entry_id}_"

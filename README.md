@@ -10,8 +10,10 @@ Protocol from [openScale's `BeurerSanitasHandler`](https://github.com/oliexdev/o
 [danielfaust/bt-scale](https://github.com/danielfaust/bt-scale) (both GPL-3.0).
 
 ## Install
-Copy `custom_components/universal_ble_scale` into your HA `config/custom_components/`
-(or add this repo to HACS as a custom repository), restart, then step on the scale: it should
+**HACS:** add `https://github.com/william-sy/ha_universal_ble_scale` as a custom repository (type
+Integration), install, and restart. **Manual:** copy `custom_components/universal_ble_scale` into
+your HA `config/custom_components/` and restart. Requires Home Assistant 2026.10 or newer.
+Then then step on the scale: it should
 be discovered. Otherwise: Settings → Devices → Add Integration → Universal BLE Scale.
 
 ## First-time setup of a profile
@@ -99,8 +101,13 @@ anyway, enable debug logging for `custom_components.universal_ble_scale` and sen
   not force a measurement for one of them; a weigh-in is picked up live or on the next sync.
 * The advertised BLE name of the SBF70 isn't verified; auto-discovery matches several names.
   If yours isn't discovered, use the manual picker.
-* Quality scale: all rules but strict typing (mypy) are addressed, tests cover ~95%. Not an official
-  core integration, so no official tier.
+* Not an official core integration: it is community-maintained and not reviewed by the Home Assistant
+  project. Tests cover ~97% and CI runs lint, tests, hassfest and HACS validation.
 
 ## Tests
 `uv venv --python 3.14 .venv && uv pip install -r requirements_test.txt && pytest`
+
+## Licence
+GPL-3.0, see [LICENSE](LICENSE). The wire protocol was worked out from the GPL-3.0 projects
+[openScale](https://github.com/oliexdev/openScale) and
+[bt-scale](https://github.com/danielfaust/bt-scale) and checked against the vendor's own app.
