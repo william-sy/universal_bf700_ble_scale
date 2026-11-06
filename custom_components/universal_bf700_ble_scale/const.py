@@ -1,8 +1,8 @@
-"""Constants for Universal BLE Scale."""
+"""Constants for Universal BF700 BLE Scale."""
 
 from __future__ import annotations
 
-DOMAIN = "universal_ble_scale"
+DOMAIN = "universal_bf700_ble_scale"
 
 CONF_ADDRESS = "address"
 CONF_NICKNAME = "nickname"

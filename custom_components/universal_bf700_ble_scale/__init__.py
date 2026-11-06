@@ -1,4 +1,4 @@
-"""Universal BLE Scale: Beurer / Sanitas / Silvercrest BLE scales via HA Bluetooth."""
+"""Universal BF700 BLE Scale: Beurer / Sanitas / Silvercrest BLE scales via HA Bluetooth."""
 
 from __future__ import annotations
 

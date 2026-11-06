@@ -28,7 +28,7 @@ jobs:
         with:
           python-version: "3.14"
       - run: uv venv --clear .venv && uv pip install --python .venv/bin/python -r requirements_test.txt
-      - run: .venv/bin/python -m pytest tests -q --cov=custom_components.universal_ble_scale --cov-report=term-missing --cov-fail-under=90
+      - run: .venv/bin/python -m pytest tests -q --cov=custom_components.universal_bf700_ble_scale --cov-report=term-missing --cov-fail-under=90
 
   hassfest:
     runs-on: ubuntu-latest

@@ -23,5 +23,5 @@ def mock_bluetooth(enable_bluetooth):
 @pytest.fixture
 def mock_setup_entry() -> Generator[None]:
     """Avoid real setup in config flow tests."""
-    with patch("custom_components.universal_ble_scale.async_setup_entry", return_value=True):
+    with patch("custom_components.universal_bf700_ble_scale.async_setup_entry", return_value=True):
         yield

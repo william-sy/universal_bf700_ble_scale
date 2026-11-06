@@ -1,6 +1,6 @@
 {
-  "domain": "universal_ble_scale",
-  "name": "Universal BLE Scale",
+  "domain": "universal_bf700_ble_scale",
+  "name": "Universal BF700 BLE Scale",
   "bluetooth": [
     {
       "local_name": "SANITAS SBF70*",
@@ -83,5 +83,5 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/william-sy/ha_universal_ble_scale/issues",
   "requirements": [],
-  "version": "0.1.0"
+  "version": "0.2.0"
 }

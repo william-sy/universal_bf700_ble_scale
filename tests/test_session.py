@@ -8,14 +8,14 @@ from datetime import UTC, date, datetime
 
 import pytest
 
-from custom_components.universal_ble_scale.protocol import (
+from custom_components.universal_bf700_ble_scale.protocol import (
     CHAR_UUID,
     UserProfile,
     decode_measurement,
     parse_live_weight,
     start_byte_candidates,
 )
-from custom_components.universal_ble_scale.session import (
+from custom_components.universal_bf700_ble_scale.session import (
     Person,
     ScaleSession,
     SessionError,

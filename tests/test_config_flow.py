@@ -9,8 +9,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.universal_ble_scale.config_flow import age_on, birth_date_for_age
-from custom_components.universal_ble_scale.const import DOMAIN
+from custom_components.universal_bf700_ble_scale.config_flow import age_on, birth_date_for_age
+from custom_components.universal_bf700_ble_scale.const import DOMAIN
 
 from .helpers import ADDR, inject, make_info
 
@@ -180,7 +180,9 @@ def test_manifest_matchers_cover_the_family_and_are_valid() -> None:
         ble_device_matches,
     )
 
-    manifest = json.loads(Path("custom_components/universal_ble_scale/manifest.json").read_text())
+    manifest = json.loads(
+        Path("custom_components/universal_bf700_ble_scale/manifest.json").read_text()
+    )
     matchers = manifest["bluetooth"]
     for matcher in matchers:
         _local_name_to_index_key(matcher["local_name"])  # raises if too broad

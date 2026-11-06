@@ -16,20 +16,20 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
-from custom_components.universal_ble_scale.const import DOMAIN, EVENT_MEASUREMENT
-from custom_components.universal_ble_scale.diagnostics import (
+from custom_components.universal_bf700_ble_scale.const import DOMAIN, EVENT_MEASUREMENT
+from custom_components.universal_bf700_ble_scale.diagnostics import (
     async_get_config_entry_diagnostics,
 )
-from custom_components.universal_ble_scale.protocol import Measurement
-from custom_components.universal_ble_scale.session import SessionError, SessionResult
+from custom_components.universal_bf700_ble_scale.protocol import Measurement
+from custom_components.universal_bf700_ble_scale.session import SessionError, SessionResult
 
 from .helpers import ADDR, inject, make_info
 from .test_config_flow import PERSON, hub
 
 M = Measurement(datetime(2026, 11, 6, 8, 0, tzinfo=UTC), 1648, 82.4, 500, 21.5, 55.0, 42.0, 3.0)
 M2 = Measurement(datetime(2026, 11, 7, 8, 0, tzinfo=UTC), 1600, 80.0, 500, 21.0, 55.0, 42.0, 3.0)
-SESSION = "custom_components.universal_ble_scale.coordinator.ScaleSession"
-CONNECT = "custom_components.universal_ble_scale.coordinator.establish_connection"
+SESSION = "custom_components.universal_bf700_ble_scale.coordinator.ScaleSession"
+CONNECT = "custom_components.universal_bf700_ble_scale.coordinator.establish_connection"
 
 
 async def _setup(hass: HomeAssistant) -> MockConfigEntry:
@@ -249,7 +249,7 @@ async def _run_session_with(hass, result):
 
 
 async def test_users_sensor_lists_slots_and_flags_ours(hass: HomeAssistant) -> None:
-    from custom_components.universal_ble_scale.protocol import RemoteUser
+    from custom_components.universal_bf700_ble_scale.protocol import RemoteUser
 
     result = SessionResult(
         battery=90,

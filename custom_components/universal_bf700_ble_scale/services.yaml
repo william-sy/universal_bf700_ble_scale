@@ -1,7 +1,7 @@
 delete_scale_user:
   target:
     entity:
-      integration: universal_ble_scale
+      integration: universal_bf700_ble_scale
       domain: sensor
   fields:
     uid:

@@ -1,4 +1,4 @@
-# Universal BLE Scale (Home Assistant)
+# Universal BF700 BLE Scale (Home Assistant)
 
 Native Home Assistant integration for the Beurer / Sanitas "BF700 family" of Bluetooth scales:
 Sanitas SBF70, Silvercrest SBF75, Beurer BF700 / BF710 / BF800, Runtastic Libra.
@@ -11,10 +11,10 @@ Protocol from [openScale's `BeurerSanitasHandler`](https://github.com/oliexdev/o
 
 ## Install
 **HACS:** add `https://github.com/william-sy/ha_universal_ble_scale` as a custom repository (type
-Integration), install, and restart. **Manual:** copy `custom_components/universal_ble_scale` into
+Integration), install, and restart. **Manual:** copy `custom_components/universal_bf700_ble_scale` into
 your HA `config/custom_components/` and restart. Requires Home Assistant 2026.10 or newer.
 Then then step on the scale: it should
-be discovered. Otherwise: Settings → Devices → Add Integration → Universal BLE Scale.
+be discovered. Otherwise: Settings → Devices → Add Integration → Universal BF700 BLE Scale.
 
 ## First-time setup of a profile
 Right after you submit the profile, **step on the scale within 30 seconds (barefoot) and stay on until it
@@ -43,7 +43,7 @@ edit one via its ⋮ → Reconfigure). A person already on the scale from the ve
 + birth year) is adopted instead of duplicated. One connection per wake-up serves everyone and also
 drains stored weigh-ins so the scale's memory can't fill up.
 
-Every weigh-in is announced as a `universal_ble_scale_measurement` event (person, timestamp, weight,
+Every weigh-in is announced as a `universal_bf700_ble_scale_measurement` event (person, timestamp, weight,
 body composition), so piled-up history isn't lost even though the sensors show the newest value.
 
 Per person: weight, body fat, body water, muscle, bone mass, BMI (calculated), impedance (disabled by
@@ -73,7 +73,10 @@ automation:
         target: {entity_id: button.sanitas_sbf70_scan_now}
 ```
 
-Upgrading from 0.1: your existing entry is migrated automatically (entities keep their ids and history).
+**Upgrading from v0.1.x:** the integration was renamed (domain `universal_ble_scale` →
+`universal_bf700_ble_scale`), so Home Assistant sees it as a new integration. Remove the old entry and
+delete `custom_components/universal_ble_scale`, install this version and set up again. The scale keeps
+your user slot (it is matched by nickname and birth year), so the first weigh-in works as before.
 
 ## Managing users on the scale
 The scale has up to 8 user slots and no screen to manage them. The **Users on scale** sensor (scale
@@ -82,7 +85,7 @@ whether it is a person in HA, whether a delete is queued).
 
 * **Remove a person in HA** → the slot HA created for them is deleted from the scale at its next
   wake-up. A slot HA *adopted* from the vendor app is left alone (it may still be used there).
-* **Delete any other slot** (a test user, a leftover): call `universal_ble_scale.delete_scale_user`
+* **Delete any other slot** (a test user, a leftover): call `universal_bf700_ble_scale.delete_scale_user`
   on the *Users on scale* sensor with the `uid` from its attributes. It's queued and carried out the
   next time the scale wakes (step on it, or press **Scan now** first). People configured in HA are
   refused; remove them from the integration instead.
@@ -93,7 +96,7 @@ scale settles. Reading the weight from the wrong offset, or trusting the first l
 exactly 12.80. We read the correct offset, only trust `flag == 0` frames, prefer the full record,
 and discard a `0x0100` record that has no impedance/body data (logged as a warning). A genuine
 12.80 kg weigh-in with impedance is kept. This is a hypothesis from the protocol; if you see it
-anyway, enable debug logging for `custom_components.universal_ble_scale` and send the hex frames.
+anyway, enable debug logging for `custom_components.universal_bf700_ble_scale` and send the hex frames.
 
 ## Status / caveats
 * Working on a real Sanitas SBF70 (single profile, migration, scan window). Protocol checked against

@@ -1,4 +1,4 @@
-"""Diagnostics for Universal BLE Scale."""
+"""Diagnostics for Universal BF700 BLE Scale."""
 
 from __future__ import annotations
 
