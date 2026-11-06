@@ -78,10 +78,10 @@
   "dependencies": [
     "bluetooth_adapters"
   ],
-  "documentation": "https://github.com/william-sy/ha_universal_ble_scale",
+  "documentation": "https://github.com/william-sy/universal_bf700_ble_scale",
   "integration_type": "device",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/william-sy/ha_universal_ble_scale/issues",
+  "issue_tracker": "https://github.com/william-sy/universal_bf700_ble_scale/issues",
   "requirements": [],
   "version": "0.2.0"
 }

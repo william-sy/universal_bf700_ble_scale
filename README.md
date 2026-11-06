@@ -10,7 +10,7 @@ Protocol from [openScale's `BeurerSanitasHandler`](https://github.com/oliexdev/o
 [danielfaust/bt-scale](https://github.com/danielfaust/bt-scale) (both GPL-3.0).
 
 ## Install
-**HACS:** add `https://github.com/william-sy/ha_universal_ble_scale` as a custom repository (type
+**HACS:** add `https://github.com/william-sy/universal_bf700_ble_scale` as a custom repository (type
 Integration), install, and restart. **Manual:** copy `custom_components/universal_bf700_ble_scale` into
 your HA `config/custom_components/` and restart. Requires Home Assistant 2026.10 or newer.
 Then then step on the scale: it should
